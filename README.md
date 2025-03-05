@@ -131,7 +131,7 @@ When a new activity is detected, the timelapser will stop the current activity a
    [Service]
    User=yourusername
    WorkingDirectory=/path/to/timelapser
-   ExecStart=/path/to/timelapser/venv/bin/python app.py
+   ExecStart=/path/to/timelapser/.venv/bin/python app.py
    Restart=always
    RestartSec=5
    StandardOutput=syslog
