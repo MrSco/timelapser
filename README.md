@@ -133,22 +133,23 @@ When a new activity is detected, the timelapser will stop the current activity a
    WorkingDirectory=/path/to/timelapser
    ExecStart=/path/to/timelapser/.venv/bin/python app.py
    Restart=always
-   RestartSec=5
-   StandardOutput=syslog
-   StandardError=syslog
-   SyslogIdentifier=timelapser
 
    [Install]
    WantedBy=multi-user.target
    ```
 
-3. Enable and start the service:
+3. Save the file and reload systemd:
+   ```
+   sudo systemctl daemon-reload
+   ```
+
+4. Enable and start the service:
    ```
    sudo systemctl enable timelapser
    sudo systemctl start timelapser
    ```
 
-4. Check the status:
+5. Check the status:
    ```
    sudo systemctl status timelapser
    ```
