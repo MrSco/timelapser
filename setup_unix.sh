@@ -12,7 +12,7 @@ echo "Activating virtual environment..."
 source .venv/bin/activate
 
 echo "Installing dependencies..."
-pip install -e .
+pip install -r requirements.txt
 
 echo "Creating .env file..."
 if [ ! -f .env ]; then
