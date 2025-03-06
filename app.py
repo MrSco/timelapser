@@ -50,11 +50,15 @@ def load_state():
                 if 'camera_settings' in state:
                     webcam_controller.camera_settings.update(state['camera_settings'])
                 
+                # Apply ignored patterns to activity monitor
+                if 'ignored_patterns' in state:
+                    activity_monitor.set_ignored_patterns(state['ignored_patterns'])
+                
                 return state
-        return {'auto_mode': False}
+        return {'auto_mode': False, 'ignored_patterns': []}
     except Exception as e:
         logger.error(f"Error loading state: {str(e)}")
-        return {'auto_mode': False}
+        return {'auto_mode': False, 'ignored_patterns': []}
 
 # Save state to file
 def save_state(state):
@@ -381,7 +385,8 @@ def manage_state():
                 'interval': webcam_controller.interval,
                 'is_capturing': webcam_controller.is_capturing,
                 'current_session': os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None,
-                'camera_settings': webcam_controller.camera_settings
+                'camera_settings': webcam_controller.camera_settings,
+                'ignored_patterns': activity_monitor.ignored_patterns
             }
             return jsonify(state)
         else:
@@ -401,6 +406,10 @@ def manage_state():
             if 'camera_settings' in data:
                 webcam_controller.camera_settings.update(data['camera_settings'])
             
+            # Update ignored patterns
+            if 'ignored_patterns' in data:
+                activity_monitor.set_ignored_patterns(data['ignored_patterns'])
+            
             # Save state to file
             state = {
                 'auto_mode': webcam_controller.auto_mode,
@@ -408,7 +417,8 @@ def manage_state():
                 'interval': webcam_controller.interval,
                 'is_capturing': webcam_controller.is_capturing,
                 'current_session': os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None,
-                'camera_settings': webcam_controller.camera_settings
+                'camera_settings': webcam_controller.camera_settings,
+                'ignored_patterns': activity_monitor.ignored_patterns
             }
             save_state(state)
 

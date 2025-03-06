@@ -44,6 +44,9 @@ const cameraSettingsOverlay = document.getElementById('camera-settings-overlay')
 const closeCameraSettings = document.getElementById('close-camera-settings');
 const refreshSessionButton = document.getElementById('refresh-session-button');
 const videoLoading = document.getElementById('video-loading');
+const ignoredPatternsList = document.getElementById('ignored-patterns-list');
+const newPatternInput = document.getElementById('new-pattern-input');
+const addPatternButton = document.getElementById('add-pattern-button');
 
 // Current session ID for details view
 let currentSessionId = null;
@@ -66,7 +69,8 @@ let appState = {
         contrast: 1.0,
         exposure: 0.5,
         resolution: '1280x720'
-    }
+    },
+    ignored_patterns: []  // Add ignored patterns to app state
 };
 
 // Initialize
@@ -112,7 +116,8 @@ async function fetchState() {
                 interval: state.interval !== undefined ? state.interval : appState.interval,
                 is_capturing: state.is_capturing !== undefined ? state.is_capturing : appState.is_capturing,
                 current_session: state.current_session !== undefined ? state.current_session : appState.current_session,
-                camera_settings: state.camera_settings || appState.camera_settings
+                camera_settings: state.camera_settings || appState.camera_settings,
+                ignored_patterns: state.ignored_patterns || appState.ignored_patterns
             };
             
             console.log('State loaded:', appState);
@@ -167,6 +172,9 @@ function applyStateToUI() {
             resolutionSelect.value = appState.camera_settings.resolution;
         }
     }
+    
+    // Update ignored patterns list
+    updateIgnoredPatternsList();
 }
 
 // Save application state
@@ -367,6 +375,16 @@ function setupEventListeners() {
         saveState();
         // Pre-initialize the selected camera
         preInitializeCamera(cameraSelect.value);
+    });
+    
+    // Add pattern button
+    addPatternButton.addEventListener('click', addIgnoredPattern);
+    
+    // New pattern input - add on Enter key
+    newPatternInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            addIgnoredPattern();
+        }
     });
 }
 
@@ -1243,5 +1261,74 @@ document.addEventListener('DOMContentLoaded', function() {
         enableDragToScroll(framesContainer);
     }
 });
+
+// Add a new ignored pattern
+function addIgnoredPattern() {
+    const pattern = newPatternInput.value.trim();
+    
+    if (pattern) {
+        // Add to app state if not already present
+        if (!appState.ignored_patterns.includes(pattern)) {
+            appState.ignored_patterns.push(pattern);
+            
+            // Update UI
+            updateIgnoredPatternsList();
+            
+            // Save state
+            saveState();
+            
+            // Clear input
+            newPatternInput.value = '';
+        } else {
+            alert('This pattern is already in the list.');
+        }
+    }
+}
+
+// Remove an ignored pattern
+function removeIgnoredPattern(pattern) {
+    // Remove from app state
+    appState.ignored_patterns = appState.ignored_patterns.filter(p => p !== pattern);
+    
+    // Update UI
+    updateIgnoredPatternsList();
+    
+    // Save state
+    saveState();
+}
+
+// Update the ignored patterns list in the UI
+function updateIgnoredPatternsList() {
+    // Clear current list
+    ignoredPatternsList.innerHTML = '';
+    
+    // Add each pattern
+    if (appState.ignored_patterns && appState.ignored_patterns.length > 0) {
+        appState.ignored_patterns.forEach(pattern => {
+            const item = document.createElement('div');
+            item.className = 'ignored-pattern-item';
+            
+            const patternText = document.createElement('span');
+            patternText.className = 'ignored-pattern-text';
+            patternText.textContent = pattern;
+            
+            const removeButton = document.createElement('button');
+            removeButton.className = 'remove-pattern-button';
+            removeButton.innerHTML = '&times;';
+            removeButton.title = 'Remove pattern';
+            removeButton.addEventListener('click', () => removeIgnoredPattern(pattern));
+            
+            item.appendChild(patternText);
+            item.appendChild(removeButton);
+            ignoredPatternsList.appendChild(item);
+        });
+    } else {
+        // Show a message if no patterns
+        const emptyMessage = document.createElement('p');
+        emptyMessage.className = 'info-text';
+        emptyMessage.textContent = 'No ignored patterns. Add patterns below to ignore specific activities.';
+        ignoredPatternsList.appendChild(emptyMessage);
+    }
+}
 
 

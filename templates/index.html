@@ -135,6 +135,20 @@
                     <button id="apply-settings-button">Apply Settings</button>
                     <button id="reset-settings-button" class="secondary">Reset</button>
                 </div>
+                
+                <div class="form-group ignored-patterns-section">
+                    <h3>Ignored Activity Patterns</h3>
+                    <p class="info-text">Add patterns to ignore when detecting activity. Useful for filtering out known patterns like clear operations.</p>
+                    
+                    <div id="ignored-patterns-list">
+                        <!-- Patterns will be added here dynamically -->
+                    </div>
+                    
+                    <div class="pattern-input-container">
+                        <input type="text" id="new-pattern-input" placeholder="Enter pattern to ignore">
+                        <button id="add-pattern-button" class="small-button">Add</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

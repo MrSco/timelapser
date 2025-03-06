@@ -3,6 +3,7 @@ import time
 import logging
 import requests
 import os
+import re
 from dotenv import load_dotenv
 
 # Configure logging
@@ -30,9 +31,33 @@ class ActivityMonitor:
         self.stop_event = threading.Event()
         self.last_activity_running = False
         self.last_current_file = None  # Track the last current_file value
+        self.ignored_patterns = []  # List of patterns to ignore
         
         logger.info(f"Activity monitor initialized with target URL: {self.target_url}")
         logger.info(f"Monitoring property: {self.status_property} and file property: {self.current_file_property}")
+    
+    def set_ignored_patterns(self, patterns):
+        """Set the list of patterns to ignore"""
+        self.ignored_patterns = patterns
+        logger.info(f"Updated ignored patterns: {patterns}")
+    
+    def is_ignored_activity(self, current_file):
+        """Check if the current file matches any of the ignored patterns"""
+        if not current_file or not self.ignored_patterns:
+            return False
+            
+        for pattern in self.ignored_patterns:
+            try:
+                if re.search(pattern, current_file):
+                    logger.info(f"Ignoring activity matching pattern '{pattern}': {current_file}")
+                    return True
+            except re.error:
+                # If the pattern is invalid, treat it as a simple string match
+                if pattern in current_file:
+                    logger.info(f"Ignoring activity containing '{pattern}': {current_file}")
+                    return True
+                    
+        return False
     
     def start(self):
         """Start the activity monitor thread"""
@@ -80,6 +105,15 @@ class ActivityMonitor:
                     # Log current file if it exists
                     if current_file:
                         logger.info(f"Current file: {current_file}")
+                    
+                    # Check if this activity should be ignored
+                    if is_running and current_file and self.is_ignored_activity(current_file):
+                        # If we're already capturing, stop it as this is an ignored activity
+                        if self.last_activity_running:
+                            logger.info("Stopping capture for ignored activity")
+                            self.webcam_controller.activity_stopped()
+                            self.last_activity_running = False
+                        continue  # Skip the rest of the processing
                     
                     # Handle activity start/stop
                     if is_running and not self.last_activity_running:
