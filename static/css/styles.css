@@ -1,9 +1,21 @@
 body {
     font-family: Arial, sans-serif;
-    max-width: 1200px;
+    max-width: 100%;
     margin: 0 auto;
-    padding: 20px;
+    padding: 10px;
     line-height: 1.6;
+    height: 100vh;
+    overflow-y: hidden;
+    box-sizing: border-box;
+}
+
+html {
+    height: 100%;
+    box-sizing: border-box;
+}
+
+*, *:before, *:after {
+    box-sizing: inherit;
 }
 
 h1, h2, h3 {
@@ -12,17 +24,56 @@ h1, h2, h3 {
 
 .container {
     display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
+    gap: 10px;
+    height: calc(50vh - 100px);
+    min-height: 300px;
 }
 
 .card {
     background-color: #f9f9f9;
     border-radius: 8px;
-    padding: 20px;
+    padding: 10px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     flex: 1;
     min-width: 300px;
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+/* Sessions card specific styling */
+.card:has(#sessions-container),
+.sessions-card {
+    height: calc(50vh - 100px);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.icon-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.icon-button:hover {
+    background-color: #e0e0e0;
+    color: #333;
+}
+
+.icon-button svg {
+    width: 20px;
+    height: 20px;
 }
 
 .status-indicator {
@@ -89,10 +140,15 @@ label {
 }
 
 .sessions {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    display: flex;
     gap: 15px;
-    margin-top: 20px;
+    margin-top: 10px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    white-space: nowrap;
+    scrollbar-width: thin;
+    flex-wrap: nowrap;
+    height: 350px;
 }
 
 .session-card {
@@ -100,11 +156,28 @@ label {
     border-radius: 8px;
     padding: 15px;
     background-color: white;
+    min-width: 200px;
+    max-width: 250px;
+    display: inline-block;
+    flex: 0 0 auto;
+    height: 100%;
+    overflow-y: hidden;
 }
 
 .session-card img {
     max-width: 100%;
+    max-height: 150px;
     border-radius: 4px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 2px solid transparent;
+    object-fit: cover;
+}
+
+.session-card img:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border-color: #4CAF50;
 }
 
 .slider-container {
@@ -128,11 +201,261 @@ label {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-    .container {
-        flex-direction: column;
-    }
     
     .card {
         min-width: auto;
+        max-height: none;
     }
+    
+    body {
+        height: auto;
+        overflow-y: auto;
+    }
+
+    .preview-container {
+        max-width: 200px;
+    }
+}
+
+@media (max-width: 400px) {
+    .container {
+        flex-direction: column;
+        height: auto;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+
+}
+
+/* Add hover effect for frames */
+.frame {
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 150px;
+    max-width: 200px;
+    height: 150px;
+    display: inline-block;
+    flex: 0 0 auto;
+}
+
+.frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.frame:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+}
+
+/* Style for the preview container */
+#preview-container {
+    text-align: center;
+}
+
+#preview-image {
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Info text styling */
+.info-text {
+    font-style: italic;
+    color: #666;
+    margin: 10px 0;
+}
+
+.preview-hint {
+    font-style: italic;
+    color: #666;
+    margin: 0px;
+}
+
+/* Collapsible section styles */
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.toggle-button {
+    background: none;
+    border: none;
+    color: #333;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 10px;
+}
+
+.toggle-button:hover {
+    background: none;
+    color: #4CAF50;
+}
+
+.collapsible-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+/* Lightbox styles */
+.lightbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.lightbox.hidden {
+    display: none;
+}
+
+.lightbox-content {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.close-lightbox {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* Session overlay styles */
+.overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    overflow-y: auto;
+}
+
+.overlay.hidden {
+    display: none;
+}
+
+.overlay-content {
+    background-color: white;
+    margin: 5% auto;
+    padding: 10px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 1000px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+.overlay-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.close-overlay {
+    background: none;
+    border: none;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #333;
+    padding: 0 10px;
+}
+
+.close-overlay:hover {
+    color: #f44336;
+    background: none;
+}
+
+/* Camera preview section */
+#camera-preview-section {
+    border-top: 1px solid #ddd;
+}
+
+.preview-container {
+    text-align: center;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    overflow: hidden;
+    max-width: 325px;
+}
+
+#camera-preview-image {
+    max-width: 100%;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 2px solid transparent;
+}
+
+#camera-preview-image:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border-color: #4CAF50;
+}
+
+#frames-container {
+    margin-top: 10px;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    white-space: nowrap;
+    scrollbar-width: thin;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+#video-container {
+    margin-top: 10px;
+    text-align: center;
+}
+
+#video-player {
+    max-width: 100%;
+    max-height: 350px;
+    width: auto;
 } 

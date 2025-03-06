@@ -75,8 +75,13 @@ initial_state = load_state()
 poll_interval = int(os.getenv('POLL_INTERVAL', '5'))
 activity_monitor = ActivityMonitor(webcam_controller, poll_interval=poll_interval)
 
-# Start activity monitor
-activity_monitor.start()
+# Only start activity monitor if auto_mode is enabled in the initial state
+if initial_state and initial_state.get('auto_mode', False):
+    logger.info("Auto mode enabled in initial state, starting activity monitor")
+    activity_monitor.start()
+else:
+    logger.info("Auto mode disabled in initial state, activity monitor not started")
+
 
 @app.route('/')
 def index():
@@ -92,6 +97,9 @@ def get_status():
         # Add current file information from activity monitor if available
         if hasattr(activity_monitor, 'last_current_file') and activity_monitor.last_current_file:
             status['current_file'] = activity_monitor.last_current_file
+        
+        # Include sessions data to avoid a separate API call
+        status['sessions'] = webcam_controller.list_sessions()
         
         return jsonify(status)
     except Exception as e:
@@ -169,10 +177,10 @@ def get_session_frames(session_id):
     """Get frames for a specific session"""
     try:
         frames = webcam_controller.get_session_frames(session_id)
-        return jsonify({"frames": frames})
+        return jsonify({"success": True, "frames": frames})
     except Exception as e:
         logger.error(f"Error getting session frames: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/create_video', methods=['POST'])
 def create_timelapse_video():
@@ -252,26 +260,39 @@ def test_timelapse_capture():
         available_cameras = webcam_controller.scan_cameras()
         
         # Capture test frame
-        base64_image = webcam_controller.test_capture(camera)
-        
-        if base64_image:
-            logger.info(f"Successfully captured test frame from camera: {camera}")
-            return jsonify({
-                "success": True,
-                "image": base64_image,
-                "available_cameras": available_cameras
-            })
-        else:
-            logger.error(f"Failed to capture test frame from camera: {camera}. Available cameras: {available_cameras}")
+        try:
+            base64_image = webcam_controller.test_capture(camera)
             
-            return jsonify({
-                "success": False, 
-                "error": f"Failed to capture test frame from camera: {camera}",
-                "available_cameras": available_cameras
-            }), 400
+            if base64_image:
+                logger.info(f"Successfully captured test frame from camera: {camera}")
+                return jsonify({
+                    "success": True,
+                    "image": base64_image,
+                    "available_cameras": available_cameras
+                })
+            else:
+                logger.error(f"Failed to capture test frame from camera: {camera}. Available cameras: {available_cameras}")
+                
+                return jsonify({
+                    "success": False, 
+                    "error": f"Failed to capture test frame from camera: {camera}",
+                    "available_cameras": available_cameras
+                }), 400
+        except Exception as capture_error:
+            error_str = str(capture_error)
+            logger.error(f"Error in test capture: {error_str}")
+            
+            # Check for common errors and provide helpful messages
+            if "Assertion failed" in error_str and "Mat" in error_str:
+                # This is likely a resolution issue
+                current_resolution = webcam_controller.camera_settings.get('resolution', 'unknown')
+                error_message = f"Camera doesn't support the current resolution ({current_resolution}). Try a lower resolution in Camera Settings."
+                return jsonify({"success": False, "error": error_message}), 400
+            else:
+                return jsonify({"success": False, "error": error_str}), 400
     except Exception as e:
         logger.error(f"Error capturing test frame: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/delete/<session_id>', methods=['DELETE'])
 def delete_timelapse_session(session_id):
@@ -291,23 +312,50 @@ def update_camera_settings():
     """Update camera settings"""
     try:
         data = request.json
-        brightness = data.get('brightness', 0.5)
-        contrast = data.get('contrast', 1.0)
-        exposure = data.get('exposure', 0.5)
         
-        # Update the camera settings in the webcam controller
+        # Validate required fields
+        required_fields = ['brightness', 'contrast', 'exposure']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'error': f'Missing required field: {field}'})
+        
+        # Update camera settings
         webcam_controller.camera_settings = {
-            'brightness': float(brightness),
-            'contrast': float(contrast),
-            'exposure': float(exposure)
+            'brightness': float(data['brightness']),
+            'contrast': float(data['contrast']),
+            'exposure': float(data['exposure'])
         }
+        
+        # Track if resolution was adjusted
+        actual_resolution = None
+        
+        # Update resolution if provided
+        if 'width' in data and 'height' in data:
+            try:
+                width = int(data['width'])
+                height = int(data['height'])
+                
+                # Set resolution in webcam controller
+                webcam_controller.set_resolution(width, height)
+                
+                # Get the actual resolution that was set (may be different from requested)
+                actual_resolution = webcam_controller.camera_settings.get('resolution')
+                
+                logger.info(f"Updated camera resolution to {actual_resolution}")
+            except Exception as e:
+                logger.error(f"Error setting resolution: {str(e)}")
+                # Continue with other settings even if resolution fails
         
         logger.info(f"Updated camera settings: {webcam_controller.camera_settings}")
         
-        return jsonify({'success': True})
+        response = {'success': True}
+        if actual_resolution:
+            response['actual_resolution'] = actual_resolution
+            
+        return jsonify(response)
     except Exception as e:
         logger.error(f"Error updating camera settings: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/state', methods=['GET', 'POST'])
 def manage_state():
@@ -347,6 +395,11 @@ def manage_state():
                 'camera_settings': webcam_controller.camera_settings
             }
             save_state(state)
+
+            if webcam_controller.auto_mode:
+                activity_monitor.start()
+            else:
+                activity_monitor.stop()
             
             return jsonify({"success": True, "state": state})
     except Exception as e:

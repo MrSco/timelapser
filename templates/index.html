@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Timelapser</title>
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
@@ -20,10 +20,26 @@
             </p>
             <p id="current-session"></p>
             <p id="auto-mode-status"></p>
+            
+            <div id="camera-preview-section">
+                <h3>Camera Preview</h3>
+                <p class="preview-hint">Most recent capture from test or active session</p>
+                <div class="preview-container">
+                    <img id="camera-preview-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOTk5Ij5ObyBJbWFnZSBBdmFpbGFibGU8L3RleHQ+PHBhdGggZD0iTTE2MCwxMDAgTDI0MCwxMDAgTDI0MCwyMDAgTDE2MCwyMDAgWiIgc3Ryb2tlPSIjOTk5IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48Y2lyY2xlIGN4PSIyMDAiIGN5PSIxNTAiIHI9IjMwIiBzdHJva2U9IiM5OTkiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" alt="Camera preview" title="Click to enlarge">
+                </div>
+            </div>
         </div>
         
         <div class="card">
-            <h2>Camera Control</h2>
+            <div class="card-header">
+                <h2>Camera Control</h2>
+                <button id="camera-settings-button" class="icon-button" title="Camera Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
             <div class="form-group">
                 <label for="camera-select">Camera:</label>
                 <select id="camera-select"></select>
@@ -48,72 +64,102 @@
                 <button id="test-button">Test Capture</button>
             </div>
         </div>
-        
-        <div class="card">
-            <h2>Camera Settings</h2>
-            <div class="form-group">
-                <label for="brightness-slider">Brightness:</label>
-                <div class="slider-container">
-                    <input type="range" id="brightness-slider" min="0" max="1" step="0.05" value="0.5">
-                    <span id="brightness-value" class="slider-value">0.5</span>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="contrast-slider">Contrast:</label>
-                <div class="slider-container">
-                    <input type="range" id="contrast-slider" min="0.5" max="2" step="0.05" value="1.0">
-                    <span id="contrast-value" class="slider-value">1.0</span>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="exposure-slider">Exposure:</label>
-                <div class="slider-container">
-                    <input type="range" id="exposure-slider" min="0.05" max="1" step="0.05" value="0.5">
-                    <span id="exposure-value" class="slider-value">0.5</span>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <button id="apply-settings-button">Apply Settings</button>
-                <button id="reset-settings-button" class="secondary">Reset</button>
-            </div>
-        </div>
     </div>
     
-    <div class="card" id="preview-container" style="display: none; margin-top: 20px;">
-        <h2>Preview</h2>
-        <img id="preview-image" style="max-width: 100%; max-height: 400px;">
-    </div>
-    
-    <div class="card" style="margin-top: 20px;">
+    <div class="card sessions-card" style="margin-top: 20px;">
         <h2>Timelapse Sessions</h2>
         <div id="sessions-container" class="sessions">
             <!-- Sessions will be dynamically added here -->
         </div>
     </div>
     
-    <div id="session-details" class="card hidden" style="margin-top: 20px;">
-        <h2>Session Details: <span id="session-name"></span></h2>
-        <button id="back-button" class="secondary">Back to Sessions</button>
-        
-        <div class="form-group">
-            <label for="fps-input">FPS:</label>
-            <input type="number" id="fps-input" min="1" max="60" value="10">
-            <button id="create-video-button">Create Video</button>
+    <div id="lightbox" class="lightbox hidden">
+        <span class="close-lightbox">&times;</span>
+        <img class="lightbox-content" id="lightbox-image">
+    </div>
+    
+    <div id="camera-settings-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <h2>Camera Settings</h2>
+                <button id="close-camera-settings" class="close-overlay">&times;</button>
+            </div>
+            
+            <div id="camera-settings-content">
+                <div class="form-group">
+                    <label for="resolution-select">Resolution:</label>
+                    <select id="resolution-select">
+                        <option value="640x480">640x480</option>
+                        <option value="800x600">800x600</option>
+                        <option value="1280x720" selected>1280x720</option>
+                        <option value="1920x1080">1920x1080</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="brightness-slider">Brightness:</label>
+                    <div class="slider-container">
+                        <input type="range" id="brightness-slider" min="0" max="1" step="0.05" value="0.5">
+                        <span id="brightness-value" class="slider-value">0.5</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contrast-slider">Contrast:</label>
+                    <div class="slider-container">
+                        <input type="range" id="contrast-slider" min="0.5" max="2" step="0.05" value="1.0">
+                        <span id="contrast-value" class="slider-value">1.0</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="exposure-slider">Exposure:</label>
+                    <div class="slider-container">
+                        <input type="range" id="exposure-slider" min="0.05" max="1" step="0.05" value="0.5">
+                        <span id="exposure-value" class="slider-value">0.5</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <button id="apply-settings-button">Apply Settings</button>
+                    <button id="reset-settings-button" class="secondary">Reset</button>
+                </div>
+            </div>
         </div>
-        
-        <div id="frames-container" style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px;">
-            <!-- Frames will be dynamically added here -->
+    </div>
+    
+    <div id="session-overlay" class="overlay hidden">
+        <div id="session-details" class="overlay-content">
+            <div class="overlay-header">
+                <h2>Session Details: <span id="session-name"></span></h2>
+                <button id="back-button" class="close-overlay">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label for="fps-input">FPS:</label>
+                <input type="number" id="fps-input" min="1" max="60" value="10">
+                <button id="create-video-button">Create Video</button>
+            </div>
+            
+            <p class="info-text">Showing the 10 most recent frames. Click on any frame to see a larger preview.</p>
+            
+            <div id="frames-container">
+                <!-- Frames will be dynamically added here -->
+            </div>
+            
+            <div id="video-container" class="hidden">
+                <h3>Timelapse Video</h3>
+                <video id="video-player" controls>
+                    Your browser does not support the video tag.
+                </video>
+            </div>
         </div>
-        
-        <div id="video-container" class="hidden" style="margin-top: 20px;">
-            <h3>Timelapse Video</h3>
-            <video id="video-player" controls style="max-width: 100%;">
-                Your browser does not support the video tag.
-            </video>
-        </div>
+    </div>
+    
+    <div class="card" id="preview-container" style="display: none; margin-top: 20px;">
+        <h2>Frame Preview</h2>
+        <p class="preview-hint">Click on any frame in a session to see a larger preview here</p>
+        <img id="preview-image" style="max-width: 100%; max-height: 600px;">
     </div>
     
     <script src="/static/js/timelapser.js"></script>

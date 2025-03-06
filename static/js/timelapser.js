@@ -22,6 +22,7 @@ const resetSettingsButton = document.getElementById('reset-settings-button');
 const previewContainer = document.getElementById('preview-container');
 const previewImage = document.getElementById('preview-image');
 const sessionsContainer = document.getElementById('sessions-container');
+const sessionOverlay = document.getElementById('session-overlay');
 const sessionDetails = document.getElementById('session-details');
 const sessionName = document.getElementById('session-name');
 const backButton = document.getElementById('back-button');
@@ -30,12 +31,25 @@ const createVideoButton = document.getElementById('create-video-button');
 const framesContainer = document.getElementById('frames-container');
 const videoContainer = document.getElementById('video-container');
 const videoPlayer = document.getElementById('video-player');
+const resolutionSelect = document.getElementById('resolution-select');
+const cameraSettingsContent = document.getElementById('camera-settings-content');
+const cameraPreviewContainer = document.getElementById('camera-preview-container');
+const cameraPreviewImage = document.getElementById('camera-preview-image');
+const lightbox = document.getElementById('lightbox');
+const lightboxImage = document.getElementById('lightbox-image');
+const closeLightbox = document.querySelector('.close-lightbox');
+const cameraSettingsButton = document.getElementById('camera-settings-button');
+const cameraSettingsOverlay = document.getElementById('camera-settings-overlay');
+const closeCameraSettings = document.getElementById('close-camera-settings');
 
 // Current session ID for details view
 let currentSessionId = null;
 
 // Variable to store the polling interval ID
 let statusPollingInterval = null;
+
+// Variable to store the most recent image URL
+let mostRecentImageUrl = null;
 
 // Application state
 let appState = {
@@ -45,7 +59,8 @@ let appState = {
     camera_settings: {
         brightness: 0.5,
         contrast: 1.0,
-        exposure: 0.5
+        exposure: 0.5,
+        resolution: '1280x720'
     }
 };
 
@@ -54,14 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch application state
     fetchState();
     
-    // Fetch initial status
+    // Fetch initial status (which now includes sessions)
     fetchStatus();
     
     // Fetch available cameras
     fetchCameras();
-    
-    // Fetch timelapse sessions
-    fetchSessions();
     
     // Set up event listeners
     setupEventListeners();
@@ -74,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function fetchState() {
     try {
         const response = await fetch('/state');
+        
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
@@ -94,6 +107,8 @@ async function fetchState() {
                 interval: state.interval !== undefined ? state.interval : appState.interval,
                 camera_settings: state.camera_settings || appState.camera_settings
             };
+            
+            console.log('State loaded:', appState);
             
             // Apply state to UI
             applyStateToUI();
@@ -130,6 +145,10 @@ function applyStateToUI() {
         if (appState.camera_settings.exposure !== undefined) {
             exposureSlider.value = appState.camera_settings.exposure;
             exposureValue.textContent = appState.camera_settings.exposure;
+        }
+        
+        if (appState.camera_settings.resolution !== undefined) {
+            resolutionSelect.value = appState.camera_settings.resolution;
         }
     }
 }
@@ -180,6 +199,9 @@ function setupEventListeners() {
         
         // Update the auto mode status text
         autoModeStatus.textContent = `Auto mode: ${appState.auto_mode ? 'Enabled' : 'Disabled'}`;
+        
+        // Save state to server
+        console.log('Saving auto_mode state:', appState.auto_mode);
         saveState();
     });
     
@@ -195,6 +217,13 @@ function setupEventListeners() {
     contrastSlider.addEventListener('input', updateSliderValue);
     exposureSlider.addEventListener('input', updateSliderValue);
     
+    // Resolution select
+    resolutionSelect.addEventListener('change', () => {
+        // Update state
+        appState.camera_settings.resolution = resolutionSelect.value;
+        saveState();
+    });
+    
     // Apply settings button
     applySettingsButton.addEventListener('click', applyCameraSettings);
     
@@ -203,12 +232,81 @@ function setupEventListeners() {
     
     // Back button
     backButton.addEventListener('click', () => {
-        sessionDetails.classList.add('hidden');
-        fetchSessions();
+        sessionOverlay.classList.add('hidden');
+        currentSessionId = null;
+        fetchStatus(); // Refresh sessions list
+    });
+    
+    // Close session overlay when clicking outside the content
+    sessionOverlay.addEventListener('click', (event) => {
+        if (event.target === sessionOverlay) {
+            sessionOverlay.classList.add('hidden');
+            currentSessionId = null;
+            fetchStatus(); // Refresh sessions list
+        }
+    });
+    
+    // Close session overlay with escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            if (!lightbox.classList.contains('hidden')) {
+                lightbox.classList.add('hidden');
+            } else if (!sessionOverlay.classList.contains('hidden')) {
+                sessionOverlay.classList.add('hidden');
+                currentSessionId = null;
+                fetchStatus(); // Refresh sessions list
+            }
+        }
     });
     
     // Create video button
     createVideoButton.addEventListener('click', createVideo);
+    
+    // Close lightbox
+    closeLightbox.addEventListener('click', () => {
+        lightbox.classList.add('hidden');
+    });
+    
+    // Close lightbox when clicking outside the image
+    lightbox.addEventListener('click', (event) => {
+        if (event.target === lightbox) {
+            lightbox.classList.add('hidden');
+        }
+    });
+    
+    // Close lightbox with escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !lightbox.classList.contains('hidden')) {
+            lightbox.classList.add('hidden');
+        } else if (event.key === 'Escape' && !cameraSettingsOverlay.classList.contains('hidden')) {
+            cameraSettingsOverlay.classList.add('hidden');
+        }
+    });
+    
+    // Add click event to camera preview image to open lightbox
+    cameraPreviewImage.addEventListener('click', () => {
+        if (mostRecentImageUrl) {
+            lightboxImage.src = mostRecentImageUrl;
+            lightbox.classList.remove('hidden');
+        }
+    });
+    
+    // Camera settings button
+    cameraSettingsButton.addEventListener('click', () => {
+        cameraSettingsOverlay.classList.remove('hidden');
+    });
+    
+    // Close camera settings
+    closeCameraSettings.addEventListener('click', () => {
+        cameraSettingsOverlay.classList.add('hidden');
+    });
+    
+    // Close camera settings when clicking outside the content
+    cameraSettingsOverlay.addEventListener('click', (event) => {
+        if (event.target === cameraSettingsOverlay) {
+            cameraSettingsOverlay.classList.add('hidden');
+        }
+    });
     
     // Add change event listener to camera select
     cameraSelect.addEventListener('change', () => {
@@ -223,73 +321,105 @@ function setupEventListeners() {
 function setupStatusPolling() {
     // Always poll the status endpoint to keep the UI updated
     // This is separate from the auto_mode feature which controls external API polling
+    // Using a 5-second interval to avoid too many requests since we're also fetching sessions
     statusPollingInterval = setInterval(fetchStatus, 5000);
-    console.log('UI status polling enabled');
+    console.log('UI status polling enabled (includes session updates)');
 }
 
-// Fetch timelapse status
+// Fetch application status
 async function fetchStatus() {
     try {
         const response = await fetch('/status');
-        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const status = await response.json();
         
         // Update status indicator
-        if (data.is_capturing) {
-            statusIndicator.classList.remove('status-inactive');
-            statusIndicator.classList.add('status-active');
+        if (status.is_capturing) {
+            statusIndicator.className = 'status-indicator status-active';
             statusText.textContent = 'Capturing';
-            stopButton.disabled = false;
             startButton.disabled = true;
-        } else {
-            statusIndicator.classList.remove('status-active');
-            statusIndicator.classList.add('status-inactive');
-            statusText.textContent = 'Not capturing';
-            stopButton.disabled = true;
-            startButton.disabled = false;
-        }
-        
-        // Update current session
-        if (data.current_session) {
-            currentSession.textContent = `Current session: ${data.current_session}`;
+            stopButton.disabled = false;
             
-            // Add current file information if available
-            if (data.current_file) {
-                currentSession.textContent += ` (File: ${data.current_file})`;
+            // Show current session info
+            if (status.current_session) {
+                currentSession.textContent = `Current session: ${status.current_session}`;
+                
+                // Update most recent image if available
+                if (status.latest_frame) {
+                    updateCameraPreview('/image/' + status.latest_frame);
+                }
             }
         } else {
-            currentSession.textContent = 'No active session';
+            statusIndicator.className = 'status-indicator status-inactive';
+            statusText.textContent = 'Not capturing';
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            currentSession.textContent = '';
         }
         
-        // Only update auto_mode if it's different from what we have
-        // This prevents overriding user changes with server state
-        if (data.auto_mode !== appState.auto_mode) {
-            // Directly update UI without saving state again
-            // This avoids redundant state saves when the server updates auto_mode
-            appState.auto_mode = data.auto_mode;
-            autoModeCheckbox.checked = data.auto_mode;
-            autoModeStatus.textContent = `Auto mode: ${data.auto_mode ? 'Enabled' : 'Disabled'}`;
-            console.log(`External API polling auto mode ${data.auto_mode ? 'enabled' : 'disabled'} (from server)`);
+        // Update auto mode status and appState
+        if (status.auto_mode !== undefined) {
+            // Only update if different from current state to avoid overriding user changes
+            if (appState.auto_mode !== status.auto_mode) {
+                console.log(`Auto mode updated from server: ${status.auto_mode}`);
+                
+                // Update appState with the server value
+                appState.auto_mode = status.auto_mode;
+                
+                // Update UI
+                autoModeStatus.textContent = `Auto mode: ${status.auto_mode ? 'Enabled' : 'Disabled'}`;
+                autoModeCheckbox.checked = status.auto_mode;
+            } else {
+                // Just update the text
+                autoModeStatus.textContent = `Auto mode: ${status.auto_mode ? 'Enabled' : 'Disabled'}`;
+            }
         }
         
-        // Update interval if it's different
-        if (data.interval && data.interval !== parseInt(intervalInput.value)) {
-            intervalInput.value = data.interval;
-            appState.interval = data.interval;
-            // Don't save state here, as this is just syncing with server
+        // Update interval if provided
+        if (status.interval !== undefined && status.interval !== parseInt(intervalInput.value)) {
+            appState.interval = status.interval;
+            intervalInput.value = status.interval;
         }
         
-        // Update camera selection if not already set
-        if (data.selected_camera && (!cameraSelect.value || cameraSelect.value !== data.selected_camera)) {
+        // Update camera selection if provided
+        if (status.selected_camera && (!cameraSelect.value || cameraSelect.value !== status.selected_camera)) {
+            appState.camera = status.selected_camera;
             // Find the option with this value
             const options = Array.from(cameraSelect.options);
-            const option = options.find(opt => opt.value === data.selected_camera);
+            const option = options.find(opt => opt.value === status.selected_camera);
             
             if (option) {
-                cameraSelect.value = data.selected_camera;
-                appState.camera = data.selected_camera;
-                // Don't save state here, as this is just syncing with server
+                cameraSelect.value = status.selected_camera;
             }
         }
+        
+        // Update sessions list
+        if (status.sessions) {
+            updateSessionsList(status.sessions, status.current_session);
+            
+            // If no recent image and we have sessions with thumbnails, use the most recent session thumbnail
+            if (!mostRecentImageUrl && status.sessions.length > 0) {
+                const sessionsWithThumbnails = status.sessions.filter(session => session.thumbnail);
+                if (sessionsWithThumbnails.length > 0) {
+                    // Sort by start time to get the most recent
+                    sessionsWithThumbnails.sort((a, b) => {
+                        if (a.info && b.info && a.info.start_time && b.info.start_time) {
+                            return new Date(b.info.start_time) - new Date(a.info.start_time);
+                        }
+                        return 0;
+                    });
+                    
+                    const mostRecentSession = sessionsWithThumbnails[0];
+                    updateCameraPreview('/image/' + mostRecentSession.thumbnail);
+                }
+            }
+        }
+        
+        return status;
     } catch (error) {
         console.error('Error fetching status:', error);
     }
@@ -376,8 +506,7 @@ async function startTimelapse() {
         
         if (result.success) {
             // Update UI
-            statusIndicator.classList.remove('status-inactive');
-            statusIndicator.classList.add('status-active');
+            statusIndicator.className = 'status-indicator status-active';
             statusText.textContent = 'Capturing';
             startButton.disabled = true;
             stopButton.disabled = false;
@@ -409,7 +538,6 @@ async function stopTimelapse() {
         
         if (data.success) {
             fetchStatus();
-            fetchSessions();
         } else {
             alert('Failed to stop timelapse: ' + (data.error || 'Unknown error'));
         }
@@ -422,6 +550,10 @@ async function stopTimelapse() {
 // Test capture
 async function testCapture() {
     try {
+        // Show loading state
+        testButton.disabled = true;
+        testButton.textContent = 'Capturing...';
+        
         const response = await fetch('/test_capture', {
             method: 'POST',
             headers: {
@@ -435,15 +567,31 @@ async function testCapture() {
         const data = await response.json();
         
         if (data.success) {
-            // Show preview
-            previewContainer.style.display = 'block';
-            previewImage.src = data.image;
+            // Update camera preview
+            updateCameraPreview(data.image);
+            
+            // Camera settings are now always visible, no need to expand
         } else {
-            alert('Failed to capture test image: ' + (data.error || 'Unknown error'));
+            // If there's a resolution error, suggest trying a lower resolution
+            if (data.error && data.error.includes('resolution')) {
+                alert('Failed to capture test image: ' + data.error + '\n\nTry selecting a lower resolution in Camera Settings.');
+                
+                // Open camera settings overlay
+                cameraSettingsOverlay.classList.remove('hidden');
+                
+                // Focus on the resolution dropdown
+                resolutionSelect.focus();
+            } else {
+                alert('Failed to capture test image: ' + (data.error || 'Unknown error'));
+            }
         }
     } catch (error) {
         console.error('Error capturing test image:', error);
         alert('Error capturing test image: ' + error.message);
+    } finally {
+        // Reset button state
+        testButton.disabled = false;
+        testButton.textContent = 'Test Capture';
     }
 }
 
@@ -461,14 +609,28 @@ function updateSliderValue(event) {
 // Apply camera settings
 async function applyCameraSettings() {
     try {
+        const [width, height] = resolutionSelect.value.split('x').map(Number);
+        
         const settings = {
             brightness: parseFloat(brightnessSlider.value),
             contrast: parseFloat(contrastSlider.value),
-            exposure: parseFloat(exposureSlider.value)
+            exposure: parseFloat(exposureSlider.value),
+            width: width,
+            height: height
         };
         
-        // Update state
-        appState.camera_settings = settings;
+        // Show loading indicator or disable button
+        applySettingsButton.disabled = true;
+        applySettingsButton.textContent = 'Applying...';
+        
+        // Update state (will be updated again with actual values from server response)
+        appState.camera_settings = {
+            ...appState.camera_settings,
+            brightness: settings.brightness,
+            contrast: settings.contrast,
+            exposure: settings.exposure,
+            resolution: resolutionSelect.value
+        };
         saveState();
         
         const response = await fetch('/update_camera_settings', {
@@ -486,13 +648,41 @@ async function applyCameraSettings() {
         const result = await response.json();
         
         if (result.success) {
-            alert('Camera settings applied successfully');
+            // Check if the server adjusted the resolution
+            if (result.actual_resolution && result.actual_resolution !== resolutionSelect.value) {
+                // Update the resolution dropdown to match what the camera actually supports
+                const options = Array.from(resolutionSelect.options);
+                const option = options.find(opt => opt.value === result.actual_resolution);
+                
+                if (option) {
+                    resolutionSelect.value = result.actual_resolution;
+                } else {
+                    // Add the new resolution option if it doesn't exist
+                    const newOption = document.createElement('option');
+                    newOption.value = result.actual_resolution;
+                    newOption.textContent = result.actual_resolution;
+                    resolutionSelect.appendChild(newOption);
+                    resolutionSelect.value = result.actual_resolution;
+                }
+                
+                // Update state with actual resolution
+                appState.camera_settings.resolution = result.actual_resolution;
+                saveState();
+                
+                alert(`Camera settings applied. Note: Camera adjusted resolution to ${result.actual_resolution}`);
+            } else {
+                alert('Camera settings applied successfully');
+            }
         } else {
             alert(`Failed to apply camera settings: ${result.error}`);
         }
     } catch (error) {
         console.error('Error applying camera settings:', error);
         alert(`Error applying camera settings: ${error.message}`);
+    } finally {
+        // Reset button state
+        applySettingsButton.disabled = false;
+        applySettingsButton.textContent = 'Apply Settings';
     }
 }
 
@@ -508,72 +698,98 @@ function resetCameraSettings() {
     exposureSlider.value = 0.5;
     exposureValue.textContent = '0.5';
     
+    // Reset resolution to default
+    resolutionSelect.value = '1280x720';
+    
     // Update state
     appState.camera_settings = {
         brightness: 0.5,
         contrast: 1.0,
-        exposure: 0.5
+        exposure: 0.5,
+        resolution: '1280x720'
     };
     saveState();
 }
 
-// Fetch timelapse sessions
-async function fetchSessions() {
-    try {
-        const response = await fetch('/sessions');
-        const data = await response.json();
-        
-        // Clear existing sessions
-        sessionsContainer.innerHTML = '';
-        
-        // Add session cards
-        data.sessions.forEach(session => {
-            const sessionCard = document.createElement('div');
-            sessionCard.className = 'session-card';
-            
-            // Add thumbnail if available
-            if (session.thumbnail) {
-                const thumbnail = document.createElement('img');
-                thumbnail.src = '/image/' + session.thumbnail;
-                thumbnail.alt = 'Session thumbnail';
-                sessionCard.appendChild(thumbnail);
-            }
-            
-            // Add session info
-            const sessionInfo = document.createElement('div');
-            sessionInfo.innerHTML = `
-                <h3>${session.id}</h3>
-                <p>Frames: ${session.frame_count}</p>
-                <p>Start: ${formatTimestamp(session.start_time)}</p>
-                <p>Status: ${session.is_active ? 'Active' : 'Completed'}</p>
-            `;
-            sessionCard.appendChild(sessionInfo);
-            
-            // Add buttons
-            const buttonContainer = document.createElement('div');
-            
-            // View button
-            const viewButton = document.createElement('button');
-            viewButton.textContent = 'View';
-            viewButton.addEventListener('click', () => viewSessionDetails(session.id));
-            buttonContainer.appendChild(viewButton);
-            
-            // Delete button (only for inactive sessions)
-            if (!session.is_active) {
-                const deleteButton = document.createElement('button');
-                deleteButton.textContent = 'Delete';
-                deleteButton.className = 'secondary';
-                deleteButton.style.marginLeft = '5px';
-                deleteButton.addEventListener('click', () => deleteSession(session.id));
-                buttonContainer.appendChild(deleteButton);
-            }
-            
-            sessionCard.appendChild(buttonContainer);
-            sessionsContainer.appendChild(sessionCard);
-        });
-    } catch (error) {
-        console.error('Error fetching sessions:', error);
+// Helper function to update the sessions list
+function updateSessionsList(sessions, activeSessionId) {
+    // If we're currently viewing session details, don't update the sessions list
+    // This prevents disrupting the user's current view
+    if (currentSessionId && !sessionOverlay.classList.contains('hidden')) {
+        // Only update if the current session is active (to show new frames)
+        if (activeSessionId === currentSessionId) {
+            // If this is the active session, refresh its details to show new frames
+            viewSessionDetails(currentSessionId);
+        }
+        return;
     }
+    
+    // Clear existing sessions
+    sessionsContainer.innerHTML = '';
+    
+    if (!sessions || sessions.length === 0) {
+        sessionsContainer.innerHTML = '<p>No timelapse sessions available.</p>';
+        return;
+    }
+    
+    // Add session cards
+    sessions.forEach(session => {
+        // Skip invalid sessions
+        if (!session || !session.id) return;
+        
+        const sessionCard = document.createElement('div');
+        sessionCard.className = 'session-card';
+        
+        // Add thumbnail if available
+        if (session.thumbnail) {
+            const thumbnail = document.createElement('img');
+            thumbnail.src = '/image/' + session.thumbnail;
+            thumbnail.alt = 'Session thumbnail';
+            thumbnail.title = 'Click to view session details';
+            // Change click event to view session details instead of opening lightbox
+            thumbnail.addEventListener('click', () => {
+                viewSessionDetails(session.id);
+            });
+            sessionCard.appendChild(thumbnail);
+        }
+        
+        // Check if this is the active session
+        const isActive = session.id === activeSessionId;
+        
+        // Session info with safe access to nested properties
+        const sessionInfo = document.createElement('div');
+        const startTime = session.info && session.info.start_time ? formatTimestamp(session.info.start_time) : 'Unknown';
+        
+        sessionInfo.innerHTML = `
+            <strong>${session.id}</strong>
+            <p>Frames: ${session.frame_count || 0}</p>
+            <p>Started: ${startTime}</p>
+            ${isActive ? '<p class="status-active">Active</p>' : ''}
+        `;
+        sessionCard.appendChild(sessionInfo);
+        
+        // Button container
+        const buttonContainer = document.createElement('div');
+        
+        // View button
+        const viewButton = document.createElement('button');
+        viewButton.textContent = 'View';
+        viewButton.addEventListener('click', () => viewSessionDetails(session.id));
+        buttonContainer.appendChild(viewButton);
+        
+        // Delete button (only for inactive sessions)
+        if (!isActive) {
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Delete';
+            deleteButton.className = 'secondary';
+            deleteButton.style.marginLeft = '5px';
+            deleteButton.addEventListener('click', () => deleteSession(session.id));
+            buttonContainer.appendChild(deleteButton);
+        }
+        
+        sessionCard.appendChild(buttonContainer);
+        sessionsContainer.appendChild(sessionCard);
+    });
 }
 
 // View session details
@@ -584,34 +800,77 @@ async function viewSessionDetails(sessionId) {
         // Update session name
         sessionName.textContent = sessionId;
         
-        // Fetch frames
+        // Show session overlay
+        sessionOverlay.classList.remove('hidden');
+        videoContainer.classList.add('hidden');
+        
+        // Fetch frames for this session
         const response = await fetch(`/frames/${sessionId}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        
+        // Check if the response has a success flag and it's false
+        if (data.success === false) {
+            throw new Error(data.error || 'Unknown error');
+        }
         
         // Clear existing frames
         framesContainer.innerHTML = '';
         
-        // Add frames
-        data.frames.forEach(frame => {
+        // Get frames from response (handle both formats for backward compatibility)
+        const frames = data.frames || [];
+        
+        if (frames.length === 0) {
+            framesContainer.innerHTML = '<p>No frames available for this session.</p>';
+            return;
+        }
+        
+        // Add frames (most recent 10)
+        const recentFrames = frames.slice(-10).reverse();
+        
+        recentFrames.forEach(frame => {
             const frameElement = document.createElement('div');
             frameElement.className = 'frame';
             
             const frameImage = document.createElement('img');
-            frameImage.src = '/image/' + frame.path;
-            frameImage.alt = 'Frame';
+            frameImage.src = `/image/${frame.path}`;
+            frameImage.alt = `Frame ${frame.index}`;
             frameImage.style.width = '100%';
+            
+            // Add click event to show preview
+            frameImage.addEventListener('click', () => {
+                // Show in lightbox instead of preview container
+                lightboxImage.src = `/image/${frame.path}`;
+                lightbox.classList.remove('hidden');
+            });
             
             frameElement.appendChild(frameImage);
             framesContainer.appendChild(frameElement);
         });
         
-        // Hide video container
-        videoContainer.classList.add('hidden');
-        
-        // Show session details
-        sessionDetails.classList.remove('hidden');
+        // Check if a video exists for this session
+        const sessionsResponse = await fetch('/sessions');
+        if (sessionsResponse.ok) {
+            const sessionsData = await sessionsResponse.json();
+            const sessionInfo = sessionsData.sessions.find(session => session.id === sessionId);
+            
+            if (sessionInfo && sessionInfo.has_video) {
+                // Show video if it exists
+                videoPlayer.src = `/video/${sessionId}`;
+                videoContainer.classList.remove('hidden');
+            }
+        }
     } catch (error) {
-        console.error('Error fetching session details:', error);
+        console.error('Error viewing session details:', error);
+        alert(`Failed to fetch frames: ${error.message}`);
+        
+        // Go back to sessions list on error
+        sessionOverlay.classList.add('hidden');
+        currentSessionId = null;
     }
 }
 
@@ -635,6 +894,9 @@ async function createVideo() {
             // Show video
             videoPlayer.src = data.video_url;
             videoContainer.classList.remove('hidden');
+            
+            // Scroll to video container within the overlay
+            videoContainer.scrollIntoView({ behavior: 'smooth' });
         } else {
             alert('Failed to create video: ' + (data.error || 'Unknown error'));
         }
@@ -646,7 +908,8 @@ async function createVideo() {
 
 // Delete session
 async function deleteSession(sessionId) {
-    if (!confirm(`Are you sure you want to delete session ${sessionId}?`)) {
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete session "${sessionId}"? This cannot be undone.`)) {
         return;
     }
     
@@ -658,7 +921,14 @@ async function deleteSession(sessionId) {
         const data = await response.json();
         
         if (data.success) {
-            fetchSessions();
+            // If we're currently viewing this session, close the overlay
+            if (currentSessionId === sessionId && !sessionOverlay.classList.contains('hidden')) {
+                sessionOverlay.classList.add('hidden');
+                currentSessionId = null;
+            }
+            
+            // Refresh sessions list
+            fetchStatus();
         } else {
             alert('Failed to delete session: ' + (data.error || 'Unknown error'));
         }
@@ -672,15 +942,31 @@ async function deleteSession(sessionId) {
 function formatTimestamp(timestamp) {
     if (!timestamp) return 'Unknown';
     
-    // Convert YYYYMMDD_HHMMSS to a more readable format
-    const year = timestamp.substring(0, 4);
-    const month = timestamp.substring(4, 6);
-    const day = timestamp.substring(6, 8);
-    const hour = timestamp.substring(9, 11);
-    const minute = timestamp.substring(11, 13);
-    const second = timestamp.substring(13, 15);
-    
-    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+    try {
+        // Check if timestamp is already in a readable format (contains dashes or spaces)
+        if (timestamp.includes('-') || timestamp.includes(' ')) {
+            return timestamp;
+        }
+        
+        // Convert YYYYMMDD_HHMMSS to a more readable format
+        const year = timestamp.substring(0, 4);
+        const month = timestamp.substring(4, 6);
+        const day = timestamp.substring(6, 8);
+        
+        // Check if we have the time part (after underscore)
+        let timeStr = '';
+        if (timestamp.includes('_') && timestamp.length > 9) {
+            const hour = timestamp.substring(9, 11);
+            const minute = timestamp.substring(11, 13);
+            const second = timestamp.length >= 15 ? timestamp.substring(13, 15) : '00';
+            timeStr = ` ${hour}:${minute}:${second}`;
+        }
+        
+        return `${year}-${month}-${day}${timeStr}`;
+    } catch (error) {
+        console.warn('Error formatting timestamp:', error);
+        return timestamp || 'Unknown'; // Return original or 'Unknown' if null
+    }
 }
 
 // Pre-initialize camera to reduce lag on first capture
@@ -709,5 +995,17 @@ async function preInitializeCamera(camera) {
         console.error('Error pre-initializing camera:', error);
         // Don't show alert to user as this is a background operation
     }
+}
+
+// Helper function to update the camera preview
+function updateCameraPreview(imageUrl) {
+    if (imageUrl) {
+        mostRecentImageUrl = imageUrl;
+        cameraPreviewImage.src = imageUrl;
+        
+        // Make sure the preview image has the title attribute
+        cameraPreviewImage.title = "Click to enlarge";
+    }
 } 
+
 

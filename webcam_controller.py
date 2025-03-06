@@ -356,9 +356,13 @@ class WebcamController:
             logger.debug(f"Creating new camera for index {camera_index}")
             cam = cv2.VideoCapture(camera_index)
             
+            if not cam.isOpened():
+                raise Exception(f"Failed to open camera {camera_index}")
+            
             # Set camera properties for better image quality
-            cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-            cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            # Use resolution from settings if available
+            resolution = self.camera_settings.get('resolution', '1280x720')
+            self._set_camera_resolution(cam, resolution)
             
             # Check if we have manual settings enabled
             has_manual_settings = False
@@ -395,6 +399,57 @@ class WebcamController:
             self.camera_last_used[cache_key] = time.time()
             
             return cam
+
+    def _set_camera_resolution(self, camera, resolution_str):
+        """Set camera resolution with fallback to lower resolutions if needed
+        
+        Args:
+            camera: OpenCV VideoCapture object
+            resolution_str: Resolution string in format "WIDTHxHEIGHT"
+            
+        Returns:
+            Tuple of (width, height) that was successfully set
+        """
+        # Define fallback resolutions in descending order
+        fallback_resolutions = ['1920x1080', '1280x720', '800x600', '640x480']
+        
+        # If the requested resolution is not in our fallback list, add it at the beginning
+        if resolution_str not in fallback_resolutions:
+            fallback_resolutions.insert(0, resolution_str)
+        else:
+            # Move the requested resolution to the beginning
+            fallback_resolutions.remove(resolution_str)
+            fallback_resolutions.insert(0, resolution_str)
+        
+        # Try each resolution until one works
+        for res in fallback_resolutions:
+            try:
+                width, height = map(int, res.split('x'))
+                logger.debug(f"Trying to set camera resolution to {width}x{height}")
+                
+                # Set resolution
+                camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                
+                # Read a test frame to verify the resolution works
+                success, frame = camera.read()
+                if success and frame is not None and frame.size > 0:
+                    actual_width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    actual_height = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    logger.info(f"Camera resolution set to {actual_width}x{actual_height}")
+                    
+                    # Update the camera settings with the actual resolution
+                    if actual_width != width or actual_height != height:
+                        self.camera_settings['resolution'] = f"{actual_width}x{actual_height}"
+                        logger.info(f"Camera reported different resolution than requested. Using {actual_width}x{actual_height}")
+                    
+                    return (actual_width, actual_height)
+            except Exception as e:
+                logger.warning(f"Failed to set resolution {res}: {str(e)}")
+        
+        # If all resolutions failed, log an error and use whatever the camera defaults to
+        logger.error("All resolution settings failed, using camera defaults")
+        return (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)), int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
     def capture_single_frame(self, output_file=None, camera=None, return_base64=False, fast_mode=False):
         """Capture a single frame using OpenCV - can be used for both test captures and timelapse captures
@@ -656,7 +711,7 @@ class WebcamController:
     def get_status(self):
         """Get current timelapse status"""
         with self.lock:
-            return {
+            status = {
                 'is_capturing': self.is_capturing,
                 'current_session': self.current_session_dir.split('/')[-1] if self.current_session_dir else None,
                 'interval': self.interval,
@@ -664,6 +719,24 @@ class WebcamController:
                 'selected_camera': self.selected_camera,
                 'available_cameras': self.available_cameras
             }
+            
+            # Add latest frame if we have an active session
+            if self.is_capturing and self.current_session_dir:
+                try:
+                    # Get the session ID
+                    session_id = self.current_session_dir.split('/')[-1]
+                    
+                    # Get frames for this session
+                    frames = self.get_session_frames(session_id)
+                    
+                    # If we have frames, get the latest one
+                    if frames and len(frames) > 0:
+                        latest_frame = frames[-1]
+                        status['latest_frame'] = latest_frame['path']
+                except Exception as e:
+                    logger.error(f"Error getting latest frame: {str(e)}")
+            
+            return status
     
     def activity_started(self):
         """Notify that a activity has started (for auto mode)"""
@@ -769,6 +842,36 @@ class WebcamController:
             self.camera_last_used.clear()
         
         logger.info("WebcamController cleanup complete")
+
+    def set_resolution(self, width, height):
+        """Set camera resolution
+        
+        Args:
+            width: Width in pixels
+            height: Height in pixels
+            
+        Returns:
+            Boolean indicating success
+        """
+        try:
+            # Store resolution in settings
+            resolution_str = f"{width}x{height}"
+            self.camera_settings['resolution'] = resolution_str
+            
+            # Apply to any cached cameras
+            with self.camera_cache_lock:
+                for camera_key, camera in self.camera_cache.items():
+                    if camera.isOpened():
+                        actual_width, actual_height = self._set_camera_resolution(camera, resolution_str)
+                        
+                        # Update the resolution in settings if it's different from requested
+                        if actual_width != width or actual_height != height:
+                            self.camera_settings['resolution'] = f"{actual_width}x{actual_height}"
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error setting resolution: {str(e)}")
+            return False
 
 # Create a singleton instance
 webcam_controller = WebcamController() 
