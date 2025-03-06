@@ -930,9 +930,10 @@ async function viewSessionDetails(sessionId) {
         // Fetch sessions to get session info
         const sessionsResponse = await fetch('/sessions');
         let displayTitle = sessionId;
+        let sessionsData = null;
         
         if (sessionsResponse.ok) {
-            const sessionsData = await sessionsResponse.json();
+            sessionsData = await sessionsResponse.json();
             const sessionInfo = sessionsData.sessions.find(session => session.id === sessionId);
             
             // Get display title - use activity file if available, otherwise use session ID
@@ -1014,9 +1015,8 @@ async function viewSessionDetails(sessionId) {
             framesContainer.appendChild(frameElement);
         });
         
-        // Check if a video exists for this session
-        if (sessionsResponse.ok) {
-            const sessionsData = await sessionsResponse.json();
+        // Check if a video exists for this session - use the already fetched sessions data
+        if (sessionsData) {
             const sessionInfo = sessionsData.sessions.find(session => session.id === sessionId);
             
             if (sessionInfo && sessionInfo.has_video) {
