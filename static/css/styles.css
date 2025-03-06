@@ -610,6 +610,11 @@ label.auto-mode-label input {
     margin-bottom: 10px;
 }
 
+#ignored-patterns-list {
+    overflow-y: auto;
+    max-height: 20vh;
+}
+
 .pattern-input-container {
     display: flex;
     margin-top: 10px;

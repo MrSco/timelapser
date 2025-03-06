@@ -28,6 +28,10 @@ webcam_controller = WebcamController(timelapse_dir=timelapse_dir)
 # State file path
 state_file_path = 'state.json'
 
+# Initialize activity monitor
+poll_interval = int(os.getenv('POLL_INTERVAL', '5'))
+activity_monitor = ActivityMonitor(webcam_controller, poll_interval=poll_interval)
+
 # Load state from file
 def load_state():
     """Load state from state.json file"""
@@ -53,6 +57,7 @@ def load_state():
                 # Apply ignored patterns to activity monitor
                 if 'ignored_patterns' in state:
                     activity_monitor.set_ignored_patterns(state['ignored_patterns'])
+                    logger.info(f"Loaded ignored patterns from state: {state['ignored_patterns']}")
                 
                 return state
         return {'auto_mode': False, 'ignored_patterns': []}
@@ -74,10 +79,6 @@ def save_state(state):
 
 # Load initial state
 initial_state = load_state()
-
-# Initialize activity monitor
-poll_interval = int(os.getenv('POLL_INTERVAL', '5'))
-activity_monitor = ActivityMonitor(webcam_controller, poll_interval=poll_interval)
 
 # Only start activity monitor if auto_mode is enabled in the initial state
 if initial_state and initial_state.get('auto_mode', False):
@@ -435,6 +436,19 @@ def manage_state():
 def on_exit():
     """Function to execute on application shutdown"""
     logger.info("Shutting down Timelapser gracefully")
+    
+    # Save current state
+    state = {
+        'auto_mode': webcam_controller.auto_mode,
+        'camera': webcam_controller.selected_camera,
+        'interval': webcam_controller.interval,
+        'is_capturing': webcam_controller.is_capturing,
+        'current_session': os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None,
+        'camera_settings': webcam_controller.camera_settings,
+        'ignored_patterns': activity_monitor.ignored_patterns
+    }
+    save_state(state)
+    logger.info("Final state saved")
     
     # Stop activity monitor
     activity_monitor.stop()
