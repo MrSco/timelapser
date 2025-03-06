@@ -271,15 +271,41 @@ def get_video_progress(session_id):
     try:
         progress_file = os.path.join(timelapse_dir, session_id, "video_progress.json")
         if os.path.exists(progress_file):
-            with open(progress_file, 'r') as f:
-                progress_data = json.load(f)
+            try:
+                # Read the file content first
+                with open(progress_file, 'r') as f:
+                    file_content = f.read().strip()
+                
+                # Try to parse the JSON
+                try:
+                    progress_data = json.loads(file_content)
+                except json.JSONDecodeError as json_err:
+                    logger.error(f"JSON decode error in progress file: {str(json_err)}")
+                    logger.debug(f"Raw content: {file_content}")
+                    
+                    # Try to extract valid JSON if possible
+                    try:
+                        # Look for a complete JSON object by finding matching braces
+                        import re
+                        match = re.search(r'(\{.*\})', file_content)
+                        if match:
+                            progress_data = json.loads(match.group(1))
+                        else:
+                            # Return a default progress object
+                            return jsonify({"status": "processing", "progress": 50, "error": "Invalid progress data format"})
+                    except Exception as extract_err:
+                        logger.error(f"Failed to extract valid JSON: {str(extract_err)}")
+                        return jsonify({"status": "processing", "progress": 50, "error": "Invalid progress data"})
             
-            # Calculate elapsed time if available and not already provided
-            if 'start_time' in progress_data and 'elapsed_seconds' not in progress_data and progress_data['status'] != 'completed':
-                elapsed = time.time() - progress_data['start_time']
-                progress_data['elapsed_seconds'] = elapsed
-            
-            return jsonify(progress_data)
+                # Calculate elapsed time if available and not already provided
+                if 'start_time' in progress_data and 'elapsed_seconds' not in progress_data and progress_data['status'] != 'completed':
+                    elapsed = time.time() - progress_data['start_time']
+                    progress_data['elapsed_seconds'] = elapsed
+                
+                return jsonify(progress_data)
+            except Exception as file_err:
+                logger.error(f"Error reading progress file: {str(file_err)}")
+                return jsonify({"status": "unknown", "progress": 0, "error": "Error reading progress data"})
         else:
             return jsonify({"status": "unknown", "progress": 0}), 404
     except Exception as e:

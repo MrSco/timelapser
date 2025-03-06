@@ -1137,39 +1137,64 @@ async function trackVideoProgress(sessionId) {
     try {
         const response = await fetch(`/video_progress/${sessionId}`);
         if (response.ok) {
-            const data = await response.json();
-            
-            // Update progress bar
-            const progress = Math.round(data.progress || 0);
-            progressBar.style.width = `${progress}%`;
-            progressText.textContent = `${progress}%`;
-            
-            // Update status text with more detailed information
-            if (data.status === 'completed') {
-                statusText.textContent = 'Video creation completed!';
-                return true; // Signal completion
-            } else if (data.status === 'failed') {
-                statusText.textContent = `Failed: ${data.error || 'Unknown error'}`;
-                return true; // Signal completion (with error)
-            } else if (data.status === 'processing') {
-                // Show more detailed progress information
-                if (data.frame && data.total_frames) {
-                    statusText.textContent = `Processing: Frame ${data.frame}/${data.total_frames}`;
+            try {
+                // Get the raw text first
+                const rawText = await response.text();
+                
+                // Try to parse the JSON
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (jsonError) {
+                    console.error('Error parsing JSON from video_progress:', jsonError);
+                    console.log('Raw response:', rawText);
+                    
+                    // Create a default data object to continue showing progress
+                    data = {
+                        status: 'processing',
+                        progress: 50,
+                        error: 'Invalid JSON response'
+                    };
                 }
                 
-                // Show elapsed time if available
-                if (data.start_time) {
-                    const elapsed = Math.round((Date.now() / 1000) - data.start_time);
-                    statusText.textContent += ` (${elapsed}s elapsed)`;
-                }
-            } else {
-                // Show elapsed time if available
-                if (data.elapsed_seconds) {
-                    const elapsed = Math.round(data.elapsed_seconds);
-                    statusText.textContent = `Creating video... (${elapsed}s elapsed)`;
+                // Update progress bar
+                const progress = Math.round(data.progress || 0);
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `${progress}%`;
+                
+                // Update status text with more detailed information
+                if (data.status === 'completed') {
+                    statusText.textContent = 'Video creation completed!';
+                    return true; // Signal completion
+                } else if (data.status === 'failed') {
+                    statusText.textContent = `Failed: ${data.error || 'Unknown error'}`;
+                    return true; // Signal completion (with error)
+                } else if (data.status === 'processing') {
+                    // Show more detailed progress information
+                    if (data.frame && data.total_frames) {
+                        statusText.textContent = `Processing: Frame ${data.frame}/${data.total_frames}`;
+                    }
+                    
+                    // Show elapsed time if available
+                    if (data.start_time) {
+                        const elapsed = Math.round((Date.now() / 1000) - data.start_time);
+                        statusText.textContent += ` (${elapsed}s elapsed)`;
+                    } else if (data.elapsed_seconds) {
+                        const elapsed = Math.round(data.elapsed_seconds);
+                        statusText.textContent += ` (${elapsed}s elapsed)`;
+                    }
                 } else {
-                    statusText.textContent = 'Creating video...';
+                    // Show elapsed time if available
+                    if (data.elapsed_seconds) {
+                        const elapsed = Math.round(data.elapsed_seconds);
+                        statusText.textContent = `Creating video... (${elapsed}s elapsed)`;
+                    } else {
+                        statusText.textContent = 'Creating video...';
+                    }
                 }
+            } catch (error) {
+                console.error('Error processing response:', error);
+                statusText.textContent = 'Creating video... (status unknown)';
             }
         }
     } catch (error) {

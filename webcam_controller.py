@@ -610,13 +610,28 @@ class WebcamController:
             
             # Store progress information in a status file
             status_file = os.path.join(session_dir, "video_progress.json")
-            with open(status_file, 'w') as f:
-                json.dump({
-                    'status': 'starting',
-                    'progress': 0,
-                    'total_frames': len(frames),
-                    'start_time': time.time()
-                }, f)
+            
+            # Create a lock file for this status file to prevent concurrent writes
+            status_lock = threading.Lock()
+            
+            # Helper function to safely write progress data
+            def write_progress_data(data):
+                with status_lock:
+                    try:
+                        with open(status_file, 'w') as f:
+                            json.dump(data, f, ensure_ascii=True)
+                            f.flush()
+                            os.fsync(f.fileno())  # Ensure data is written to disk
+                    except Exception as e:
+                        logger.error(f"Error writing progress data: {str(e)}")
+            
+            # Initial progress data
+            write_progress_data({
+                'status': 'starting',
+                'progress': 0,
+                'total_frames': len(frames),
+                'start_time': time.time()
+            })
             
             # Use ffmpeg with absolute paths instead of changing directory
             try:
@@ -652,14 +667,13 @@ class WebcamController:
                                     progress = min(95, (frame_count / total_frames) * 100)
                                     
                                     # Update progress file
-                                    with open(status_file, 'w') as f:
-                                        json.dump({
-                                            'status': 'processing',
-                                            'progress': progress,
-                                            'frame': frame_count,
-                                            'total_frames': total_frames,
-                                            'start_time': time.time()
-                                        }, f)
+                                    write_progress_data({
+                                        'status': 'processing',
+                                        'progress': progress,
+                                        'frame': frame_count,
+                                        'total_frames': total_frames,
+                                        'start_time': time.time()
+                                    })
                             except Exception as e:
                                 logger.error(f"Error parsing FFmpeg output: {str(e)}")
                 
@@ -676,14 +690,13 @@ class WebcamController:
                                     progress = min(95, (frame_count / total_frames) * 100)
                                     
                                     # Update progress file
-                                    with open(status_file, 'w') as f:
-                                        json.dump({
-                                            'status': 'processing',
-                                            'progress': progress,
-                                            'frame': frame_count,
-                                            'total_frames': total_frames,
-                                            'start_time': time.time()
-                                        }, f)
+                                    write_progress_data({
+                                        'status': 'processing',
+                                        'progress': progress,
+                                        'frame': frame_count,
+                                        'total_frames': total_frames,
+                                        'start_time': time.time()
+                                    })
                             except Exception as e:
                                 logger.error(f"Error parsing FFmpeg output: {str(e)}")
                 
@@ -696,25 +709,23 @@ class WebcamController:
                 stderr_thread.start()
                 
                 # Wait for the process to complete with timeout
-                process.wait(timeout=600)  # 10 minutes timeout
+                process.wait(timeout=600)
                 
                 # Update status to completed
-                with open(status_file, 'w') as f:
-                    json.dump({
-                        'status': 'completed',
-                        'progress': 100,
-                        'total_frames': len(frames),
-                        'end_time': time.time()
-                    }, f)
+                write_progress_data({
+                    'status': 'completed',
+                    'progress': 100,
+                    'total_frames': len(frames),
+                    'end_time': time.time()
+                })
                     
             except subprocess.SubprocessError as e:
                 logger.error(f"FFmpeg error: {str(e)}")
                 # Update status to failed
-                with open(status_file, 'w') as f:
-                    json.dump({
-                        'status': 'failed',
-                        'error': str(e)
-                    }, f)
+                write_progress_data({
+                    'status': 'failed',
+                    'error': str(e)
+                })
                 return False
             
             # Clean up the temporary file
