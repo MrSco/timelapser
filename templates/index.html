@@ -132,12 +132,15 @@
         <div id="session-details" class="overlay-content">
             <div class="overlay-header">
                 <h2>Session Details: <span id="session-name"></span></h2>
-                <button id="back-button" class="close-overlay">&times;</button>
+                <div>
+                    <button id="refresh-session-button" class="small-button" title="Refresh frames">↻</button>
+                    <button id="back-button" class="close-overlay">&times;</button>
+                </div>
             </div>
             
             <div class="form-group">
                 <label for="fps-input">FPS:</label>
-                <input type="number" id="fps-input" min="1" max="60" value="10">
+                <input type="number" id="fps-input" min="1" max="60" value="30">
                 <button id="create-video-button">Create Video</button>
             </div>
             

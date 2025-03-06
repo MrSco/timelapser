@@ -41,6 +41,7 @@ const closeLightbox = document.querySelector('.close-lightbox');
 const cameraSettingsButton = document.getElementById('camera-settings-button');
 const cameraSettingsOverlay = document.getElementById('camera-settings-overlay');
 const closeCameraSettings = document.getElementById('close-camera-settings');
+const refreshSessionButton = document.getElementById('refresh-session-button');
 
 // Current session ID for details view
 let currentSessionId = null;
@@ -56,6 +57,8 @@ let appState = {
     auto_mode: false,
     camera: null,
     interval: 5,
+    is_capturing: false,
+    current_session: null,
     camera_settings: {
         brightness: 0.5,
         contrast: 1.0,
@@ -105,6 +108,8 @@ async function fetchState() {
                 auto_mode: state.auto_mode !== undefined ? state.auto_mode : appState.auto_mode,
                 camera: state.camera !== undefined ? state.camera : appState.camera,
                 interval: state.interval !== undefined ? state.interval : appState.interval,
+                is_capturing: state.is_capturing !== undefined ? state.is_capturing : appState.is_capturing,
+                current_session: state.current_session !== undefined ? state.current_session : appState.current_session,
                 camera_settings: state.camera_settings || appState.camera_settings
             };
             
@@ -262,6 +267,13 @@ function setupEventListeners() {
     // Create video button
     createVideoButton.addEventListener('click', createVideo);
     
+    // Refresh session button
+    refreshSessionButton.addEventListener('click', () => {
+        if (currentSessionId) {
+            viewSessionDetails(currentSessionId);
+        }
+    });
+    
     // Close lightbox
     closeLightbox.addEventListener('click', () => {
         lightbox.classList.add('hidden');
@@ -336,6 +348,10 @@ async function fetchStatus() {
         }
         
         const status = await response.json();
+        
+        // Update appState with capturing status and current session
+        appState.is_capturing = status.is_capturing;
+        appState.current_session = status.current_session;
         
         // Update status indicator
         if (status.is_capturing) {
@@ -505,14 +521,19 @@ async function startTimelapse() {
         const result = await response.json();
         
         if (result.success) {
+            // Immediately update appState to reflect capturing status
+            appState.is_capturing = true;
+            
             // Update UI
             statusIndicator.className = 'status-indicator status-active';
             statusText.textContent = 'Capturing';
             startButton.disabled = true;
             stopButton.disabled = false;
             
-            // Update current session
-            currentSession.textContent = `Current session: ${result.session_id}`;
+            // Update current session if session_id is provided
+            if (result.session_id) {
+                currentSession.textContent = `Current session: ${result.session_id}`;
+            }
             
             // Fetch status to update UI
             fetchStatus();
@@ -537,6 +558,17 @@ async function stopTimelapse() {
         const data = await response.json();
         
         if (data.success) {
+            // Immediately update appState to reflect stopped status
+            appState.is_capturing = false;
+            
+            // Update UI
+            statusIndicator.className = 'status-indicator status-inactive';
+            statusText.textContent = 'Not capturing';
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            currentSession.textContent = '';
+            
+            // Fetch full status to update sessions list
             fetchStatus();
         } else {
             alert('Failed to stop timelapse: ' + (data.error || 'Unknown error'));
@@ -713,14 +745,10 @@ function resetCameraSettings() {
 
 // Helper function to update the sessions list
 function updateSessionsList(sessions, activeSessionId) {
-    // If we're currently viewing session details, don't update the sessions list
+    // If we're currently viewing session details, don't update anything
     // This prevents disrupting the user's current view
     if (currentSessionId && !sessionOverlay.classList.contains('hidden')) {
-        // Only update if the current session is active (to show new frames)
-        if (activeSessionId === currentSessionId) {
-            // If this is the active session, refresh its details to show new frames
-            viewSessionDetails(currentSessionId);
-        }
+        // Don't update anything while the session overlay is open
         return;
     }
     
@@ -753,8 +781,8 @@ function updateSessionsList(sessions, activeSessionId) {
             sessionCard.appendChild(thumbnail);
         }
         
-        // Check if this is the active session
-        const isActive = session.id === activeSessionId;
+        // Check if this is the active session - only mark as active if the session ID matches AND is_capturing is true
+        const isActive = session.id === activeSessionId && appState.is_capturing === true;
         
         // Session info with safe access to nested properties
         const sessionInfo = document.createElement('div');
@@ -816,6 +844,16 @@ async function viewSessionDetails(sessionId) {
         // Check if the response has a success flag and it's false
         if (data.success === false) {
             throw new Error(data.error || 'Unknown error');
+        }
+        
+        // Check if this session is active
+        const isActive = sessionId === appState.current_session && appState.is_capturing;
+        
+        // Update session name with active indicator if needed
+        if (isActive) {
+            sessionName.innerHTML = `${sessionId} <span class="status-active" style="display: inline-block; margin-left: 5px; vertical-align: middle;"></span>`;
+        } else {
+            sessionName.textContent = sessionId;
         }
         
         // Clear existing frames

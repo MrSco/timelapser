@@ -142,7 +142,9 @@ def start_timelapse():
         
         result = webcam_controller.start_timelapse(camera, interval, auto_mode)
         if result:
-            return jsonify({"success": True})
+            # Get the current session ID from the webcam controller
+            current_session = webcam_controller.current_session_dir.split('/')[-1] if webcam_controller.current_session_dir else None
+            return jsonify({"success": True, "session_id": current_session})
         else:
             return jsonify({"success": False, "error": "Failed to start timelapse"}), 400
     except Exception as e:
@@ -188,7 +190,7 @@ def create_timelapse_video():
     try:
         data = request.json
         session_id = data.get('session_id')
-        fps = data.get('fps', 10)
+        fps = data.get('fps', 30)
         
         # Validate session_id
         if not session_id:
@@ -367,6 +369,8 @@ def manage_state():
                 'auto_mode': webcam_controller.auto_mode,
                 'camera': webcam_controller.selected_camera,
                 'interval': webcam_controller.interval,
+                'is_capturing': webcam_controller.is_capturing,
+                'current_session': webcam_controller.current_session_dir.split('/')[-1] if webcam_controller.current_session_dir else None,
                 'camera_settings': webcam_controller.camera_settings
             }
             return jsonify(state)
@@ -392,6 +396,8 @@ def manage_state():
                 'auto_mode': webcam_controller.auto_mode,
                 'camera': webcam_controller.selected_camera,
                 'interval': webcam_controller.interval,
+                'is_capturing': webcam_controller.is_capturing,
+                'current_session': webcam_controller.current_session_dir.split('/')[-1] if webcam_controller.current_session_dir else None,
                 'camera_settings': webcam_controller.camera_settings
             }
             save_state(state)
