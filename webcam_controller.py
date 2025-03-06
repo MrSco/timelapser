@@ -42,6 +42,10 @@ class WebcamController:
         self.camera_last_used = {}
         self.camera_cache_timeout = 30  # Seconds to keep a camera open
         
+        # Video creation process tracking
+        self.ffmpeg_processes = {}
+        self.ffmpeg_processes_lock = threading.Lock()
+        
         # Create timelapses directory if it doesn't exist
         os.makedirs(self.timelapse_dir, exist_ok=True)
         
@@ -614,10 +618,28 @@ class WebcamController:
             # Create a lock file for this status file to prevent concurrent writes
             status_lock = threading.Lock()
             
+            # Store the initial start time
+            start_time = time.time()
+            
             # Helper function to safely write progress data
             def write_progress_data(data):
                 with status_lock:
                     try:
+                        # If we're updating an existing file, try to preserve the original start_time
+                        original_start_time = None
+                        if os.path.exists(status_file):
+                            try:
+                                with open(status_file, 'r') as f:
+                                    existing_data = json.load(f)
+                                    if 'start_time' in existing_data:
+                                        original_start_time = existing_data['start_time']
+                            except:
+                                pass
+                        
+                        # Use the original start time if available, otherwise use the one provided in data
+                        if original_start_time is not None and 'start_time' in data:
+                            data['start_time'] = original_start_time
+                        
                         with open(status_file, 'w') as f:
                             json.dump(data, f, ensure_ascii=True)
                             f.flush()
@@ -630,7 +652,7 @@ class WebcamController:
                 'status': 'starting',
                 'progress': 0,
                 'total_frames': len(frames),
-                'start_time': time.time()
+                'start_time': start_time
             })
             
             # Use ffmpeg with absolute paths instead of changing directory
@@ -649,6 +671,16 @@ class WebcamController:
                     '-y',
                     output_video
                 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+                
+                # Store the process in our tracking dictionary
+                session_id = Path(session_dir).name
+                with self.ffmpeg_processes_lock:
+                    self.ffmpeg_processes[session_id] = {
+                        'process': process,
+                        'start_time': start_time,
+                        'status_file': status_file,
+                        'write_progress': write_progress_data
+                    }
                 
                 # Track progress
                 frame_count = 0
@@ -672,7 +704,8 @@ class WebcamController:
                                         'progress': progress,
                                         'frame': frame_count,
                                         'total_frames': total_frames,
-                                        'start_time': time.time()
+                                        'start_time': start_time,
+                                        'elapsed_seconds': time.time() - start_time
                                     })
                             except Exception as e:
                                 logger.error(f"Error parsing FFmpeg output: {str(e)}")
@@ -695,7 +728,8 @@ class WebcamController:
                                         'progress': progress,
                                         'frame': frame_count,
                                         'total_frames': total_frames,
-                                        'start_time': time.time()
+                                        'start_time': start_time,
+                                        'elapsed_seconds': time.time() - start_time
                                     })
                             except Exception as e:
                                 logger.error(f"Error parsing FFmpeg output: {str(e)}")
@@ -709,14 +743,61 @@ class WebcamController:
                 stderr_thread.start()
                 
                 # Wait for the process to complete with timeout
-                process.wait(timeout=600)
+                try:
+                    process.wait(timeout=600)
+                    
+                    # Check if process was terminated by cancel
+                    with self.ffmpeg_processes_lock:
+                        if session_id in self.ffmpeg_processes and self.ffmpeg_processes[session_id].get('cancelled', False):
+                            write_progress_data({
+                                'status': 'cancelled',
+                                'progress': 0,
+                                'total_frames': len(frames),
+                                'start_time': start_time,
+                                'end_time': time.time(),
+                                'elapsed_seconds': time.time() - start_time
+                            })
+                            
+                            # Clean up the process entry
+                            if session_id in self.ffmpeg_processes:
+                                del self.ffmpeg_processes[session_id]
+                                
+                            return {
+                                'success': False,
+                                'cancelled': True,
+                                'message': 'Video creation was cancelled'
+                            }
+                except subprocess.TimeoutExpired:
+                    # Process timed out, kill it
+                    process.kill()
+                    write_progress_data({
+                        'status': 'failed',
+                        'error': 'Process timed out after 10 minutes',
+                        'start_time': start_time,
+                        'end_time': time.time(),
+                        'elapsed_seconds': time.time() - start_time
+                    })
+                    
+                    # Clean up the process entry
+                    with self.ffmpeg_processes_lock:
+                        if session_id in self.ffmpeg_processes:
+                            del self.ffmpeg_processes[session_id]
+                            
+                    return False
+                
+                # Clean up the process entry
+                with self.ffmpeg_processes_lock:
+                    if session_id in self.ffmpeg_processes:
+                        del self.ffmpeg_processes[session_id]
                 
                 # Update status to completed
                 write_progress_data({
                     'status': 'completed',
                     'progress': 100,
                     'total_frames': len(frames),
-                    'end_time': time.time()
+                    'start_time': start_time,
+                    'end_time': time.time(),
+                    'elapsed_seconds': time.time() - start_time
                 })
                     
             except subprocess.SubprocessError as e:
@@ -724,8 +805,18 @@ class WebcamController:
                 # Update status to failed
                 write_progress_data({
                     'status': 'failed',
-                    'error': str(e)
+                    'error': str(e),
+                    'start_time': start_time,
+                    'end_time': time.time(),
+                    'elapsed_seconds': time.time() - start_time
                 })
+                
+                # Clean up the process entry
+                session_id = Path(session_dir).name
+                with self.ffmpeg_processes_lock:
+                    if session_id in self.ffmpeg_processes:
+                        del self.ffmpeg_processes[session_id]
+                        
                 return False
             
             # Clean up the temporary file
@@ -743,6 +834,53 @@ class WebcamController:
         except Exception as e:
             logger.error(f"Error creating video: {str(e)}")
             return False
+            
+    def cancel_video(self, session_id):
+        """Cancel an ongoing video creation process"""
+        with self.ffmpeg_processes_lock:
+            if session_id in self.ffmpeg_processes:
+                process_info = self.ffmpeg_processes[session_id]
+                process = process_info.get('process')
+                
+                if process and process.poll() is None:  # Process is still running
+                    try:
+                        # Mark as cancelled
+                        self.ffmpeg_processes[session_id]['cancelled'] = True
+                        
+                        # Terminate the process
+                        process.terminate()
+                        
+                        # Wait a bit for graceful termination
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            # Force kill if it doesn't terminate gracefully
+                            process.kill()
+                        
+                        # Update the status file
+                        write_progress = process_info.get('write_progress')
+                        if write_progress:
+                            write_progress({
+                                'status': 'cancelled',
+                                'progress': 0,
+                                'start_time': process_info.get('start_time', time.time()),
+                                'end_time': time.time(),
+                                'elapsed_seconds': time.time() - process_info.get('start_time', time.time()),
+                                'error': 'Video creation was cancelled by user'
+                            })
+                        
+                        logger.info(f"Cancelled video creation for session {session_id}")
+                        return True
+                    except Exception as e:
+                        logger.error(f"Error cancelling video creation: {str(e)}")
+                        return False
+                else:
+                    # Process already completed or not found
+                    logger.warning(f"No active video creation process found for session {session_id}")
+                    return False
+            else:
+                logger.warning(f"No video creation process found for session {session_id}")
+                return False
     
     def list_sessions(self):
         """List all timelapse sessions"""

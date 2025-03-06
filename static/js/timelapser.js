@@ -389,6 +389,12 @@ function setupEventListeners() {
             addIgnoredPattern();
         }
     });
+    
+    // Add event listener for cancel video button
+    const cancelVideoButton = document.getElementById('cancel-video-button');
+    if (cancelVideoButton) {
+        cancelVideoButton.addEventListener('click', cancelVideoCreation);
+    }
 }
 
 // Setup regular status polling for UI updates
@@ -1048,6 +1054,13 @@ async function createVideo() {
         videoLoading.classList.remove('hidden');
         createVideoButton.disabled = true;
         
+        // Show cancel button
+        const cancelVideoButton = document.getElementById('cancel-video-button');
+        if (cancelVideoButton) {
+            cancelVideoButton.classList.remove('hidden');
+            cancelVideoButton.disabled = false;
+        }
+        
         // Reset progress bar
         const progressBar = document.getElementById('video-progress-bar');
         const progressText = document.getElementById('video-progress-text');
@@ -1077,12 +1090,26 @@ async function createVideo() {
                 const isCompleted = await trackVideoProgress(currentSessionId);
                 if (isCompleted) {
                     clearInterval(progressTrackingId);
+                    
+                    // Hide cancel button when completed
+                    if (cancelVideoButton) {
+                        cancelVideoButton.classList.add('hidden');
+                    }
                 }
             }, 1000); // Check progress every second
             
             // Wait for the request to complete
             const response = await createVideoRequest;
             const data = await response.json();
+            
+            // Hide loading spinner and enable button
+            videoLoading.classList.add('hidden');
+            createVideoButton.disabled = false;
+            
+            // Hide cancel button
+            if (cancelVideoButton) {
+                cancelVideoButton.classList.add('hidden');
+            }
             
             if (data.success) {
                 // Show video
@@ -1102,29 +1129,91 @@ async function createVideo() {
                 } else {
                     alert(`Video successfully created with ${data.frame_count} frames.`);
                 }
+            } else if (data.cancelled) {
+                alert(data.message || 'Video creation was cancelled.');
+                
+                // Clear the progress tracking
+                if (progressTrackingId) {
+                    clearInterval(progressTrackingId);
+                }
             } else {
                 alert('Failed to create video: ' + (data.error || 'Unknown error'));
             }
         } catch (error) {
             console.error('Error creating video:', error);
             alert('Error creating video: ' + error.message);
-        } finally {
-            // Clear progress tracking interval
+            
+            // Hide loading spinner and enable button
+            videoLoading.classList.add('hidden');
+            createVideoButton.disabled = false;
+            
+            // Hide cancel button
+            if (cancelVideoButton) {
+                cancelVideoButton.classList.add('hidden');
+            }
+            
+            // Clear the progress tracking
             if (progressTrackingId) {
                 clearInterval(progressTrackingId);
             }
-            
-            // Hide loading spinner and re-enable button regardless of success or failure
-            videoLoading.classList.add('hidden');
-            createVideoButton.disabled = false;
         }
     } catch (error) {
         console.error('Error creating video:', error);
         alert('Error creating video: ' + error.message);
+    }
+}
+
+// Cancel video creation
+async function cancelVideoCreation() {
+    if (!currentSessionId) {
+        alert('No active session to cancel.');
+        return;
+    }
+    
+    if (!confirm('Are you sure you want to cancel video creation? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        // Disable the cancel button to prevent multiple clicks
+        const cancelVideoButton = document.getElementById('cancel-video-button');
+        if (cancelVideoButton) {
+            cancelVideoButton.disabled = true;
+        }
         
-        // Make sure loading spinner is hidden in case of error
-        videoLoading.classList.add('hidden');
-        createVideoButton.disabled = false;
+        // Update status text
+        const statusText = document.getElementById('video-status-text');
+        statusText.textContent = 'Cancelling video creation...';
+        
+        // Send cancel request
+        const response = await fetch(`/cancel_video/${currentSessionId}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            statusText.textContent = 'Video creation cancelled.';
+        } else {
+            statusText.textContent = 'Failed to cancel: ' + (data.error || 'Unknown error');
+            
+            // Re-enable the cancel button
+            if (cancelVideoButton) {
+                cancelVideoButton.disabled = false;
+            }
+        }
+    } catch (error) {
+        console.error('Error cancelling video creation:', error);
+        
+        // Re-enable the cancel button
+        const cancelVideoButton = document.getElementById('cancel-video-button');
+        if (cancelVideoButton) {
+            cancelVideoButton.disabled = false;
+        }
+        
+        // Update status text
+        const statusText = document.getElementById('video-status-text');
+        statusText.textContent = 'Error cancelling: ' + error.message;
     }
 }
 
@@ -1162,35 +1251,56 @@ async function trackVideoProgress(sessionId) {
                 progressBar.style.width = `${progress}%`;
                 progressText.textContent = `${progress}%`;
                 
+                // Calculate elapsed time - prefer elapsed_seconds if available
+                let elapsedText = '';
+                if (data.elapsed_seconds) {
+                    const elapsed = Math.round(data.elapsed_seconds);
+                    elapsedText = ` (${elapsed}s elapsed)`;
+                } else if (data.start_time) {
+                    const elapsed = Math.round((Date.now() / 1000) - data.start_time);
+                    elapsedText = ` (${elapsed}s elapsed)`;
+                }
+                
                 // Update status text with more detailed information
                 if (data.status === 'completed') {
-                    statusText.textContent = 'Video creation completed!';
+                    statusText.textContent = 'Video creation completed!' + elapsedText;
+                    
+                    // Hide cancel button
+                    const cancelVideoButton = document.getElementById('cancel-video-button');
+                    if (cancelVideoButton) {
+                        cancelVideoButton.classList.add('hidden');
+                    }
+                    
                     return true; // Signal completion
                 } else if (data.status === 'failed') {
-                    statusText.textContent = `Failed: ${data.error || 'Unknown error'}`;
+                    statusText.textContent = `Failed: ${data.error || 'Unknown error'}` + elapsedText;
+                    
+                    // Hide cancel button
+                    const cancelVideoButton = document.getElementById('cancel-video-button');
+                    if (cancelVideoButton) {
+                        cancelVideoButton.classList.add('hidden');
+                    }
+                    
                     return true; // Signal completion (with error)
+                } else if (data.status === 'cancelled') {
+                    statusText.textContent = `Cancelled: ${data.error || 'Video creation was cancelled'}` + elapsedText;
+                    
+                    // Hide cancel button
+                    const cancelVideoButton = document.getElementById('cancel-video-button');
+                    if (cancelVideoButton) {
+                        cancelVideoButton.classList.add('hidden');
+                    }
+                    
+                    return true; // Signal completion (cancelled)
                 } else if (data.status === 'processing') {
                     // Show more detailed progress information
                     if (data.frame && data.total_frames) {
-                        statusText.textContent = `Processing: Frame ${data.frame}/${data.total_frames}`;
-                    }
-                    
-                    // Show elapsed time if available
-                    if (data.start_time) {
-                        const elapsed = Math.round((Date.now() / 1000) - data.start_time);
-                        statusText.textContent += ` (${elapsed}s elapsed)`;
-                    } else if (data.elapsed_seconds) {
-                        const elapsed = Math.round(data.elapsed_seconds);
-                        statusText.textContent += ` (${elapsed}s elapsed)`;
+                        statusText.textContent = `Processing: Frame ${data.frame}/${data.total_frames}${elapsedText}`;
+                    } else {
+                        statusText.textContent = `Processing video...${elapsedText}`;
                     }
                 } else {
-                    // Show elapsed time if available
-                    if (data.elapsed_seconds) {
-                        const elapsed = Math.round(data.elapsed_seconds);
-                        statusText.textContent = `Creating video... (${elapsed}s elapsed)`;
-                    } else {
-                        statusText.textContent = 'Creating video...';
-                    }
+                    statusText.textContent = `Creating video...${elapsedText}`;
                 }
             } catch (error) {
                 console.error('Error processing response:', error);

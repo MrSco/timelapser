@@ -232,6 +232,12 @@ def create_timelapse_video():
                 "frame_count": result.get('frame_count', 0),
                 "video_existed": video_existed
             })
+        elif result and isinstance(result, dict) and result.get('cancelled'):
+            return jsonify({
+                "success": False,
+                "cancelled": True,
+                "message": result.get('message', 'Video creation was cancelled')
+            })
         else:
             return jsonify({"success": False, "error": "Failed to create video"}), 400
     except Exception as e:
@@ -296,11 +302,15 @@ def get_video_progress(session_id):
                     except Exception as extract_err:
                         logger.error(f"Failed to extract valid JSON: {str(extract_err)}")
                         return jsonify({"status": "processing", "progress": 50, "error": "Invalid progress data"})
-            
-                # Calculate elapsed time if available and not already provided
-                if 'start_time' in progress_data and 'elapsed_seconds' not in progress_data and progress_data['status'] != 'completed':
-                    elapsed = time.time() - progress_data['start_time']
-                    progress_data['elapsed_seconds'] = elapsed
+                
+                # Calculate elapsed time if not already provided
+                if 'start_time' in progress_data and 'elapsed_seconds' not in progress_data:
+                    # Don't calculate elapsed time for completed videos
+                    if progress_data.get('status') != 'completed':
+                        current_time = time.time()
+                        start_time = progress_data['start_time']
+                        progress_data['elapsed_seconds'] = current_time - start_time
+                        logger.debug(f"Calculated elapsed time: {progress_data['elapsed_seconds']}s")
                 
                 return jsonify(progress_data)
             except Exception as file_err:
@@ -482,6 +492,30 @@ def manage_state():
             return jsonify({"success": True, "state": state})
     except Exception as e:
         logger.error(f"Error managing state: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/cancel_video/<session_id>', methods=['POST'])
+def cancel_video_creation(session_id):
+    """Cancel an ongoing video creation process"""
+    try:
+        if not session_id:
+            return jsonify({"success": False, "error": "Session ID is required"}), 400
+            
+        # Call the cancel method
+        result = webcam_controller.cancel_video(session_id)
+        
+        if result:
+            return jsonify({
+                "success": True,
+                "message": "Video creation cancelled successfully"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "No active video creation process found for this session"
+            }), 404
+    except Exception as e:
+        logger.error(f"Error cancelling video creation: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def on_exit():
