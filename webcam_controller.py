@@ -215,6 +215,21 @@ class WebcamController:
                 logger.warning("No timelapse running")
                 return False
             
+            # Capture one final frame before stopping
+            try:
+                # Generate timestamp and output filename
+                frame_count = len(os.listdir(self.current_session_dir)) + 1
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_file = os.path.join(self.current_session_dir, f"frame_{frame_count:06d}_{timestamp}_final.jpg")
+                
+                # Capture the final frame
+                logger.info("Capturing final frame before stopping timelapse")
+                self.capture_single_frame(output_file=output_file, fast_mode=True)
+                logger.debug(f"Captured final frame to {output_file}")
+            except Exception as e:
+                logger.error(f"Error capturing final frame: {str(e)}")
+            
+            # Now stop the capture loop
             self.is_capturing = False
             if self.capture_thread:
                 self.capture_thread.join(timeout=2.0)
