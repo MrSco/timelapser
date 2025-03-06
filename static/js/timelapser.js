@@ -1158,6 +1158,90 @@ function updateCameraPreview(imageUrl) {
         // Make sure the preview image has the title attribute
         cameraPreviewImage.title = "Click to enlarge";
     }
-} 
+}
+
+/**
+ * Enables drag-to-scroll functionality for a container
+ * @param {HTMLElement} element - The scrollable container element
+ */
+function enableDragToScroll(element) {
+    if (!element) return;
+    
+    let isDown = false;
+    let isDragging = false;
+    let startX;
+    let scrollLeft;
+    let startTime;
+    let startScrollLeft;
+    
+    element.addEventListener('mousedown', (e) => {
+        isDown = true;
+        isDragging = false; // Reset dragging state
+        element.classList.add('active');
+        startX = e.pageX - element.offsetLeft;
+        scrollLeft = element.scrollLeft;
+        startTime = new Date().getTime();
+        startScrollLeft = element.scrollLeft;
+        // Don't prevent default here to allow clicks
+    });
+    
+    element.addEventListener('mouseleave', () => {
+        isDown = false;
+        isDragging = false;
+        element.classList.remove('active');
+        element.classList.remove('grabbing');
+    });
+    
+    element.addEventListener('mouseup', (e) => {
+        // If we've been dragging, prevent the click
+        if (isDragging) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        isDown = false;
+        isDragging = false;
+        element.classList.remove('active');
+        element.classList.remove('grabbing');
+    });
+    
+    element.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        
+        const x = e.pageX - element.offsetLeft;
+        const walk = (x - startX) * 2; // Scroll speed multiplier
+        
+        // Only consider it a drag if we've moved more than 5px or scrolled
+        if (!isDragging && (Math.abs(walk) > 5 || element.scrollLeft !== startScrollLeft)) {
+            isDragging = true;
+            element.classList.add('grabbing');
+        }
+        
+        if (isDragging) {
+            e.preventDefault();
+            element.scrollLeft = scrollLeft - walk;
+        }
+    });
+    
+    // Add click handler to prevent clicks immediately after dragging
+    element.addEventListener('click', (e) => {
+        if (isDragging) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true); // Use capture phase
+}
+
+// Initialize drag-to-scroll functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Apply drag scrolling to the sessions container
+    enableDragToScroll(document.getElementById('sessions-container'));
+    
+    // Also apply to frames container when it's available
+    const framesContainer = document.getElementById('frames-container');
+    if (framesContainer) {
+        enableDragToScroll(framesContainer);
+    }
+});
 
 

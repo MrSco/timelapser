@@ -208,6 +208,19 @@ label.auto-mode-label input {
     scrollbar-width: thin;
     flex-wrap: nowrap;
     height: 350px;
+    cursor: grab;
+}
+
+.sessions.active {
+    cursor: grab;
+}
+
+.sessions.grabbing {
+    cursor: grabbing;
+}
+
+.sessions.grabbing .session-card * {
+    pointer-events: none;
 }
 
 .session-card {
@@ -221,6 +234,16 @@ label.auto-mode-label input {
     flex: 0 0 auto;
     height: 100%;
     overflow-y: hidden;
+    cursor: grab;
+    user-select: none;
+}
+
+.sessions.grabbing .session-card {
+    cursor: grabbing;
+}
+
+.session-card:active {
+    cursor: grabbing;
 }
 
 .session-card img {
@@ -298,6 +321,10 @@ label.auto-mode-label input {
     height: 150px;
     display: inline-block;
     flex: 0 0 auto;
+}
+
+#frames-container.grabbing .frame {
+    cursor: grabbing;
 }
 
 .frame img {
@@ -493,6 +520,19 @@ label.auto-mode-label input {
     padding-bottom: 10px;
     white-space: nowrap;
     scrollbar-width: thin;
+    cursor: grab;
+}
+
+#frames-container.active {
+    cursor: grab;
+}
+
+#frames-container.grabbing {
+    cursor: grabbing;
+}
+
+#frames-container.grabbing .frame * {
+    pointer-events: none;
 }
 
 /* Scrollbar styling */
