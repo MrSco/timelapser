@@ -439,7 +439,7 @@ async function fetchStatus() {
             currentSession.textContent = '';
         }
         
-        // Update activity information
+        // Update activity information - show regardless of capture status
         if (status.current_file) {
             // Show the activity info div
             activityInfoDiv.classList.remove('hidden');

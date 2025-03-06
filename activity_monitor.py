@@ -140,7 +140,12 @@ class ActivityMonitor:
                     
                     # Update last status
                     self.last_activity_running = is_running
-                    self.last_current_file = current_file if is_running else None
+                    # Always store the current file, even if not running
+                    if current_file:
+                        self.last_current_file = current_file
+                    elif not is_running:
+                        # Only clear the current file if the activity is not running and no file is provided
+                        self.last_current_file = None
                 else:
                     logger.warning(f"Failed to get activity status: HTTP {response.status_code}")
             

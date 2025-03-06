@@ -281,7 +281,12 @@ label.auto-mode-label input {
 }
 
 .hidden {
-    display: none;
+    display: none !important;
+}
+
+/* Specific rule for activity-ignored to override display: flex */
+#activity-ignored.hidden {
+    display: none !important;
 }
 
 /* Responsive adjustments */
@@ -661,20 +666,34 @@ label.auto-mode-label input {
 
 /* Activity info styling */
 #activity-info {
-    margin-top: 5px;
-    margin-bottom: 5px;
-    padding: 5px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding: 8px;
     border-left: 3px solid #2196F3;
     background-color: rgba(33, 150, 243, 0.1);
+    border-radius: 0 4px 4px 0;
+}
+
+#current-activity {
+    margin-bottom: 3px;
 }
 
 #activity-file {
     font-weight: bold;
     word-break: break-all;
+    color: #2196F3;
 }
 
 #activity-ignored {
     color: #F44336;
     font-style: italic;
-    margin-top: 2px;
+    margin-top: 4px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+#activity-ignored::before {
+    content: "⚠️";
+    margin-right: 5px;
 } 
