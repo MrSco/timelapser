@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 class WebcamController:
     def __init__(self, timelapse_dir='./timelapses'):
-        self.timelapse_dir = timelapse_dir
+        # Convert relative path to absolute path to avoid issues with changing working directory
+        self.timelapse_dir = os.path.abspath(timelapse_dir)
         self.current_session_dir = None
         self.is_capturing = False
         self.capture_thread = None
@@ -599,34 +600,29 @@ class WebcamController:
             # Create output video filename
             output_video = os.path.join(session_dir, f"timelapse_{Path(session_dir).name}.mp4")
             
-            # Create a temporary file list for ffmpeg
+            # Create a temporary file list for ffmpeg with absolute paths
             temp_list_file = os.path.join(session_dir, "frames_list.txt")
             with open(temp_list_file, 'w') as f:
                 for frame in frames:
-                    # Write just the filename, not the full path
-                    f.write(f"file '{frame}'\n")
+                    # Write the full absolute path to each frame
+                    f.write(f"file '{os.path.abspath(os.path.join(session_dir, frame))}'\n")
             
-            # Change working directory to the session directory before running ffmpeg
-            current_dir = os.getcwd()
-            os.chdir(session_dir)
-            
+            # Use ffmpeg with absolute paths instead of changing directory
             try:
-                # Use ffmpeg with the concat demuxer instead of glob patterns
-                # Using -r instead of -framerate for better compatibility
                 subprocess.run([
                     'ffmpeg',
                     '-f', 'concat',
                     '-safe', '0',
-                    '-i', 'frames_list.txt',
-                    '-r', str(fps),  # Use -r instead of -framerate
+                    '-i', temp_list_file,
+                    '-r', str(fps),
                     '-c:v', 'libx264',
                     '-pix_fmt', 'yuv420p',
                     '-y',
-                    Path(output_video).name
+                    output_video
                 ], check=True, timeout=180)  # Increased timeout to 3 minutes for larger sessions
-            finally:
-                # Restore the original working directory
-                os.chdir(current_dir)
+            except subprocess.SubprocessError as e:
+                logger.error(f"FFmpeg error: {str(e)}")
+                return False
             
             # Clean up the temporary file
             try:
