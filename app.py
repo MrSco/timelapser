@@ -152,7 +152,12 @@ def start_timelapse():
         interval = data.get('interval')
         auto_mode = data.get('auto_mode')
         
-        result = webcam_controller.start_timelapse(camera, interval, auto_mode)
+        # Get current activity file from activity monitor if available
+        activity_file = None
+        if hasattr(activity_monitor, 'last_current_file') and activity_monitor.last_current_file:
+            activity_file = activity_monitor.last_current_file
+        
+        result = webcam_controller.start_timelapse(camera, interval, auto_mode, activity_file)
         if result:
             # Get the current session ID from the webcam controller
             current_session = os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None

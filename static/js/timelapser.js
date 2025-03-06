@@ -884,8 +884,14 @@ function updateSessionsList(sessions, activeSessionId) {
         const sessionInfo = document.createElement('div');
         const startTime = session.info && session.info.start_time ? formatTimestamp(session.info.start_time) : 'Unknown';
         
+        // Get display title - use activity file if available, otherwise use session ID
+        let displayTitle = session.id;
+        if (session.info && session.info.activity_file) {
+            displayTitle = session.info.activity_file;
+        }
+        
         sessionInfo.innerHTML = `
-            <strong>${session.id}</strong>
+            <strong>${displayTitle}</strong>
             <p>Frames: ${session.frame_count || 0}</p>
             <p>Started: ${startTime}</p>
             ${isActive ? '<p class="status-active">Active</p>' : ''}
@@ -921,8 +927,22 @@ async function viewSessionDetails(sessionId) {
     try {
         currentSessionId = sessionId;
         
+        // Fetch sessions to get session info
+        const sessionsResponse = await fetch('/sessions');
+        let displayTitle = sessionId;
+        
+        if (sessionsResponse.ok) {
+            const sessionsData = await sessionsResponse.json();
+            const sessionInfo = sessionsData.sessions.find(session => session.id === sessionId);
+            
+            // Get display title - use activity file if available, otherwise use session ID
+            if (sessionInfo && sessionInfo.info && sessionInfo.info.activity_file) {
+                displayTitle = sessionInfo.info.activity_file;
+            }
+        }
+        
         // Update session name
-        sessionName.textContent = sessionId;
+        sessionName.textContent = displayTitle;
         
         // Show session overlay
         sessionOverlay.classList.remove('hidden');
@@ -947,13 +967,13 @@ async function viewSessionDetails(sessionId) {
         
         // Update session name with active indicator if needed
         if (isActive) {
-            sessionName.innerHTML = `${sessionId} <span class="status-active" style="display: inline-block; margin-left: 5px; vertical-align: middle;"></span>`;
+            sessionName.innerHTML = `${displayTitle} <span class="status-active" style="display: inline-block; margin-left: 5px; vertical-align: middle;"></span>`;
             
             // Disable create video button for active sessions
             createVideoButton.disabled = true;
             createVideoButton.title = "Cannot create video while capture is in progress";
         } else {
-            sessionName.textContent = sessionId;
+            sessionName.textContent = displayTitle;
             
             // Enable create video button for inactive sessions
             createVideoButton.disabled = false;
@@ -995,7 +1015,6 @@ async function viewSessionDetails(sessionId) {
         });
         
         // Check if a video exists for this session
-        const sessionsResponse = await fetch('/sessions');
         if (sessionsResponse.ok) {
             const sessionsData = await sessionsResponse.json();
             const sessionInfo = sessionsData.sessions.find(session => session.id === sessionId);

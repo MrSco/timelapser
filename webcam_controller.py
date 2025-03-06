@@ -163,7 +163,7 @@ class WebcamController:
         logger.info(f"Available cameras: {self.available_cameras}")
         return self.available_cameras
     
-    def start_timelapse(self, camera=None, interval=None, auto_mode=None):
+    def start_timelapse(self, camera=None, interval=None, auto_mode=None, activity_file=None):
         """Start timelapse capture"""
         with self.lock:
             if self.is_capturing:
@@ -191,6 +191,10 @@ class WebcamController:
                 'auto_mode': self.auto_mode,
                 'platform': self.platform
             }
+            
+            # Add activity file if provided
+            if activity_file:
+                session_info['activity_file'] = activity_file
             
             with open(os.path.join(self.current_session_dir, 'session_info.json'), 'w') as f:
                 json.dump(session_info, f)
@@ -976,11 +980,11 @@ class WebcamController:
             
             return status
     
-    def activity_started(self):
+    def activity_started(self, activity_file=None):
         """Notify that a activity has started (for auto mode)"""
         if self.auto_mode and not self.is_capturing:
             logger.info("Auto-starting timelapse due to activity start")
-            self.start_timelapse()
+            self.start_timelapse(activity_file=activity_file)
     
     def activity_stopped(self):
         """Notify that a activity has stopped (for auto mode)"""

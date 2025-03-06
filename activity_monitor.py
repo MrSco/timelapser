@@ -119,7 +119,7 @@ class ActivityMonitor:
                     # Handle activity start/stop
                     if is_running and not self.last_activity_running:
                         logger.info("Activity started, notifying webcam controller")
-                        self.webcam_controller.activity_started()
+                        self.webcam_controller.activity_started(activity_file=current_file)
                     elif not is_running and self.last_activity_running:
                         logger.info("Activity stopped, notifying webcam controller")
                         self.webcam_controller.activity_stopped()
@@ -137,7 +137,7 @@ class ActivityMonitor:
                             self.webcam_controller.activity_stopped()
                             
                             # Then start a new activity
-                            self.webcam_controller.activity_started()
+                            self.webcam_controller.activity_started(activity_file=current_file)
                     
                     # Update last status
                     self.last_activity_running = is_running
