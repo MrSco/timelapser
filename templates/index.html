@@ -142,6 +142,10 @@
                 <label for="fps-input">FPS:</label>
                 <input type="number" id="fps-input" min="1" max="60" value="30">
                 <button id="create-video-button">Create Video</button>
+                <div id="video-loading" class="loading-spinner hidden">
+                    <div class="spinner"></div>
+                    <span>Creating video...</span>
+                </div>
             </div>
             
             <p class="info-text">Showing the 10 most recent frames. Click on any frame to see a larger preview.</p>

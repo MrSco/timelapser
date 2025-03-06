@@ -623,7 +623,7 @@ class WebcamController:
                     '-pix_fmt', 'yuv420p',
                     '-y',
                     Path(output_video).name
-                ], check=True, timeout=60)
+                ], check=True, timeout=180)  # Increased timeout to 3 minutes for larger sessions
             finally:
                 # Restore the original working directory
                 os.chdir(current_dir)

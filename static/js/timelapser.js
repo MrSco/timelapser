@@ -42,6 +42,7 @@ const cameraSettingsButton = document.getElementById('camera-settings-button');
 const cameraSettingsOverlay = document.getElementById('camera-settings-overlay');
 const closeCameraSettings = document.getElementById('close-camera-settings');
 const refreshSessionButton = document.getElementById('refresh-session-button');
+const videoLoading = document.getElementById('video-loading');
 
 // Current session ID for details view
 let currentSessionId = null;
@@ -852,8 +853,16 @@ async function viewSessionDetails(sessionId) {
         // Update session name with active indicator if needed
         if (isActive) {
             sessionName.innerHTML = `${sessionId} <span class="status-active" style="display: inline-block; margin-left: 5px; vertical-align: middle;"></span>`;
+            
+            // Disable create video button for active sessions
+            createVideoButton.disabled = true;
+            createVideoButton.title = "Cannot create video while capture is in progress";
         } else {
             sessionName.textContent = sessionId;
+            
+            // Enable create video button for inactive sessions
+            createVideoButton.disabled = false;
+            createVideoButton.title = "";
         }
         
         // Clear existing frames
@@ -900,6 +909,14 @@ async function viewSessionDetails(sessionId) {
                 // Show video if it exists
                 videoPlayer.src = `/video/${sessionId}`;
                 videoContainer.classList.remove('hidden');
+                
+                // Add indicator to the create video button
+                createVideoButton.innerHTML = "Recreate Video";
+                createVideoButton.title = "A video already exists. Click to recreate.";
+            } else {
+                // Reset button text if no video exists
+                createVideoButton.innerHTML = "Create Video";
+                createVideoButton.title = "";
             }
         }
     } catch (error) {
@@ -915,32 +932,80 @@ async function viewSessionDetails(sessionId) {
 // Create video
 async function createVideo() {
     try {
-        const response = await fetch('/create_video', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                session_id: currentSessionId,
-                fps: parseInt(fpsInput.value)
-            })
-        });
+        // Check if this session is active
+        const isActive = currentSessionId === appState.current_session && appState.is_capturing;
         
-        const data = await response.json();
+        // Prevent creating video for active sessions
+        if (isActive) {
+            alert("Cannot create video while capture is in progress. Please stop the capture first.");
+            return;
+        }
         
-        if (data.success) {
-            // Show video
-            videoPlayer.src = data.video_url;
-            videoContainer.classList.remove('hidden');
+        // Check if a video already exists for this session
+        const sessionsResponse = await fetch('/sessions');
+        if (sessionsResponse.ok) {
+            const sessionsData = await sessionsResponse.json();
+            const sessionInfo = sessionsData.sessions.find(session => session.id === currentSessionId);
             
-            // Scroll to video container within the overlay
-            videoContainer.scrollIntoView({ behavior: 'smooth' });
-        } else {
-            alert('Failed to create video: ' + (data.error || 'Unknown error'));
+            if (sessionInfo && sessionInfo.has_video) {
+                // Ask for confirmation before overwriting
+                if (!confirm("A video already exists for this session. Do you want to overwrite it?")) {
+                    return; // User cancelled
+                }
+            }
+        }
+        
+        // Show loading spinner and disable button
+        videoLoading.classList.remove('hidden');
+        createVideoButton.disabled = true;
+        
+        try {
+            const response = await fetch('/create_video', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: currentSessionId,
+                    fps: parseInt(fpsInput.value)
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Show video
+                videoPlayer.src = data.video_url;
+                videoContainer.classList.remove('hidden');
+                
+                // Scroll to video container within the overlay
+                videoContainer.scrollIntoView({ behavior: 'smooth' });
+                
+                // Update button text
+                createVideoButton.innerHTML = "Recreate Video";
+                createVideoButton.title = "A video already exists. Click to recreate.";
+                
+                // Show success message
+                if (data.video_existed) {
+                    alert(`Video successfully recreated with ${data.frame_count} frames.`);
+                } else {
+                    alert(`Video successfully created with ${data.frame_count} frames.`);
+                }
+            } else {
+                alert('Failed to create video: ' + (data.error || 'Unknown error'));
+            }
+        } finally {
+            // Hide loading spinner and re-enable button regardless of success or failure
+            videoLoading.classList.add('hidden');
+            createVideoButton.disabled = false;
         }
     } catch (error) {
         console.error('Error creating video:', error);
         alert('Error creating video: ' + error.message);
+        
+        // Make sure loading spinner is hidden in case of error
+        videoLoading.classList.add('hidden');
+        createVideoButton.disabled = false;
     }
 }
 

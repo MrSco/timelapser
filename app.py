@@ -196,8 +196,17 @@ def create_timelapse_video():
         if not session_id:
             return jsonify({"success": False, "error": "Session ID is required"}), 400
         
+        # Check if this is the active session
+        current_session = os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None
+        if session_id == current_session and webcam_controller.is_capturing:
+            return jsonify({"success": False, "error": "Cannot create video while capture is in progress"}), 400
+        
         # Create session directory path
         session_dir = os.path.join(timelapse_dir, session_id)
+        
+        # Check if video already exists
+        video_file = os.path.join(session_dir, f"timelapse_{session_id}.mp4")
+        video_existed = os.path.exists(video_file)
         
         # Create video
         result = webcam_controller.create_video(session_dir, fps)
@@ -208,7 +217,8 @@ def create_timelapse_video():
                 "success": True,
                 "video_path": os.path.basename(video_path),
                 "video_url": f"/video/{session_id}",
-                "frame_count": result.get('frame_count', 0)
+                "frame_count": result.get('frame_count', 0),
+                "video_existed": video_existed
             })
         else:
             return jsonify({"success": False, "error": "Failed to create video"}), 400
