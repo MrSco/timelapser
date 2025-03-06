@@ -108,6 +108,7 @@ class ActivityMonitor:
                     
                     # Check if this activity should be ignored
                     if is_running and current_file and self.is_ignored_activity(current_file):
+                        self.last_current_file = current_file
                         # If we're already capturing, stop it as this is an ignored activity
                         if self.last_activity_running:
                             logger.info("Stopping capture for ignored activity")
