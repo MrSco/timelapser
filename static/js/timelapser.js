@@ -3,6 +3,9 @@ const statusIndicator = document.getElementById('status-indicator');
 const statusText = document.getElementById('status-text');
 const refreshStatusButton = document.getElementById('refresh-status');
 const currentSession = document.getElementById('current-session');
+const activityInfoDiv = document.getElementById('activity-info');
+const activityFileSpan = document.getElementById('activity-file');
+const activityIgnoredP = document.getElementById('activity-ignored');
 const autoModeStatus = document.getElementById('auto-mode-status');
 const cameraSelect = document.getElementById('camera-select');
 const refreshCamerasButton = document.getElementById('refresh-cameras');
@@ -434,6 +437,25 @@ async function fetchStatus() {
             startButton.disabled = false;
             stopButton.disabled = true;
             currentSession.textContent = '';
+        }
+        
+        // Update activity information
+        if (status.current_file) {
+            // Show the activity info div
+            activityInfoDiv.classList.remove('hidden');
+            
+            // Update the activity file text
+            activityFileSpan.textContent = status.current_file;
+            
+            // Show/hide the ignored status
+            if (status.is_ignored) {
+                activityIgnoredP.classList.remove('hidden');
+            } else {
+                activityIgnoredP.classList.add('hidden');
+            }
+        } else {
+            // Hide the activity info div if no current file
+            activityInfoDiv.classList.add('hidden');
         }
         
         // Update auto mode status and appState

@@ -102,6 +102,12 @@ def get_status():
         # Add current file information from activity monitor if available
         if hasattr(activity_monitor, 'last_current_file') and activity_monitor.last_current_file:
             status['current_file'] = activity_monitor.last_current_file
+            
+            # Add information about whether this activity is being ignored
+            if activity_monitor.is_ignored_activity(activity_monitor.last_current_file):
+                status['is_ignored'] = True
+            else:
+                status['is_ignored'] = False
         
         # Include sessions data to avoid a separate API call
         status['sessions'] = webcam_controller.list_sessions()
