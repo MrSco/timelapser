@@ -49,12 +49,12 @@ class ActivityMonitor:
         for pattern in self.ignored_patterns:
             try:
                 if re.search(pattern, current_file):
-                    logger.info(f"Ignoring activity matching pattern '{pattern}': {current_file}")
+                    #logger.info(f"Ignoring activity matching pattern '{pattern}': {current_file}")
                     return True
             except re.error:
                 # If the pattern is invalid, treat it as a simple string match
                 if pattern in current_file:
-                    logger.info(f"Ignoring activity containing '{pattern}': {current_file}")
+                    #logger.info(f"Ignoring activity containing '{pattern}': {current_file}")
                     return True
                     
         return False
@@ -103,8 +103,8 @@ class ActivityMonitor:
                     current_file = status.get(self.current_file_property)
                     
                     # Log current file if it exists
-                    if current_file:
-                        logger.info(f"Current file: {current_file}")
+                    #if current_file:
+                    #    logger.info(f"Current file: {current_file}")
                     
                     # Check if this activity should be ignored
                     if is_running and current_file and self.is_ignored_activity(current_file):

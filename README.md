@@ -10,6 +10,12 @@ A standalone timelapse capture tool designed to work with any system that provid
 - Timelapse video creation
 - Web interface for control and monitoring
 - Can run as a system service
+- Cross-platform support (Windows, macOS, Linux)
+- Pattern-based activity filtering
+- Multiple camera support with automatic detection
+- Camera preview and test capture functionality
+- Session-based recording with automatic file organization
+- State persistence between restarts
 
 ## Requirements
 
@@ -64,6 +70,10 @@ A standalone timelapse capture tool designed to work with any system that provid
 python -m timelapser
 ```
 
+Or use the provided scripts:
+- Windows: `run_timelapser.bat`
+- Linux/Mac: `run_timelapser.sh`
+
 The web interface will be available at `http://localhost:5001` (or the port you configured).
 
 ### Configuration Options
@@ -95,6 +105,30 @@ When `is_running` is `false`, the timelapser will stop capturing frames (if auto
 It will also check for the `current_file` property to detect when a new activity starts. 
 When a new activity is detected, the timelapser will stop the current activity and start a new one.
 
+### Pattern Filtering
+
+You can configure patterns to ignore certain activities. When an activity matches one of these patterns, the timelapser will not record it, even if auto mode is enabled. This is useful for ignoring test runs or specific file types.
+
+Patterns can be:
+- Regular expressions (for advanced matching)
+- Simple text strings (for basic matching)
+
+### Camera Settings
+
+The web interface allows you to:
+- Select from available cameras on your system
+- Adjust brightness, contrast, and exposure
+- Test camera settings with a preview capture
+- View the most recent capture from the active session
+
+### Session Management
+
+Each timelapse recording is organized into a session with:
+- Timestamp-based directory naming
+- Session metadata stored in JSON format
+- Automatic frame numbering
+- Video creation from captured frames
+
 ## Running as a Service
 
 ### Windows (using NSSM)
@@ -108,7 +142,7 @@ When a new activity is detected, the timelapser will stop the current activity a
 4. In the dialog that appears:
    - Application Path: Path to your Python executable (e.g., `C:\path\to\venv\Scripts\python.exe`)
    - Startup Directory: Path to your project directory
-   - Arguments: `.\app.py`
+   - Arguments: `-m timelapser`
 5. Configure other settings as needed and click "Install service"
 6. Start the service:
    ```
@@ -131,7 +165,7 @@ When a new activity is detected, the timelapser will stop the current activity a
    [Service]
    User=yourusername
    WorkingDirectory=/path/to/timelapser
-   ExecStart=/path/to/timelapser/.venv/bin/python app.py
+   ExecStart=/path/to/timelapser/venv/bin/python -m timelapser
    Restart=always
 
    [Install]
