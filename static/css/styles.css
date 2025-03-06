@@ -20,12 +20,17 @@ html {
 
 h1, h2, h3 {
     color: #333;
+    margin: 0;
+}
+
+p {
+    margin: 0;
 }
 
 .container {
     display: flex;
     gap: 10px;
-    height: calc(50vh - 100px);
+    height: calc(40vh - 20px);
     min-height: 300px;
 }
 
@@ -43,7 +48,7 @@ h1, h2, h3 {
 /* Sessions card specific styling */
 .card:has(#sessions-container),
 .sessions-card {
-    height: calc(50vh - 100px);
+    height: 50vh;
 }
 
 .card-header {
@@ -74,6 +79,35 @@ h1, h2, h3 {
 .icon-button svg {
     width: 20px;
     height: 20px;
+}
+
+/* Styling for the start and stop buttons */
+#start-button, #stop-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    margin: 0 10px;
+}
+
+#start-button svg, #stop-button svg {
+    width: 24px;
+    height: 24px;
+}
+
+#start-button {
+    background-color: #4CAF50;
+}
+
+#start-button:hover {
+    background-color: #45a049;
+}
+
+#stop-button {
+    background-color: #f44336;
+}
+
+#stop-button:hover {
+    background-color: #d32f2f;
 }
 
 .status-indicator {
@@ -154,6 +188,16 @@ label {
     font-weight: bold;
 }
 
+label.auto-mode-label {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+}
+
+label.auto-mode-label input {
+    margin-right: 10px;
+}
+
 .sessions {
     display: flex;
     gap: 15px;
@@ -203,6 +247,7 @@ label {
 
 .slider-container input {
     flex: 1;
+    padding: 0;
 }
 
 .slider-value {
@@ -416,16 +461,13 @@ label {
 }
 
 /* Camera preview section */
-#camera-preview-section {
-    border-top: 1px solid #ddd;
-}
 
 .preview-container {
     text-align: center;
     background-color: #f0f0f0;
     border-radius: 4px;
     overflow: hidden;
-    max-width: 325px;
+    max-width: 20vw;
 }
 
 #camera-preview-image {
@@ -480,7 +522,7 @@ label {
 
 #video-player {
     width: 100%;
-    max-width: 800px;
+    max-width: 35vw;
     border-radius: 4px;
 }
 

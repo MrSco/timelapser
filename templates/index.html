@@ -16,20 +16,29 @@
             <p>
                 <span id="status-indicator" class="status-indicator status-inactive"></span>
                 <span id="status-text">Not capturing</span>
-                <button id="refresh-status" class="small-button">Refresh</button>
+                <!--<button id="refresh-status" class="small-button">Refresh</button>-->
             </p>
             <p id="current-session"></p>
-            <p id="auto-mode-status"></p>
-            
+            <label class="auto-mode-label">
+                <p id="auto-mode-status"></p>
+                <input type="checkbox" id="auto-mode-checkbox">
+            </label>
+        </div>
+
+        <div class="card">
             <div id="camera-preview-section">
-                <h3>Camera Preview</h3>
+                <h2>Camera Preview</h2>
                 <p class="preview-hint">Most recent capture from test or active session</p>
                 <div class="preview-container">
                     <img id="camera-preview-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOTk5Ij5ObyBJbWFnZSBBdmFpbGFibGU8L3RleHQ+PHBhdGggZD0iTTE2MCwxMDAgTDI0MCwxMDAgTDI0MCwyMDAgTDE2MCwyMDAgWiIgc3Ryb2tlPSIjOTk5IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48Y2lyY2xlIGN4PSIyMDAiIGN5PSIxNTAiIHI9IjMwIiBzdHJva2U9IiM5OTkiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" alt="Camera preview" title="Click to enlarge">
                 </div>
+                <div class="form-group">
+                    <button id="test-button">Test Capture</button>
+                </div>
+    
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h2>Camera Control</h2>
@@ -41,32 +50,34 @@
                 </button>
             </div>
             <div class="form-group">
-                <label for="camera-select">Camera:</label>
                 <select id="camera-select"></select>
-                <button id="refresh-cameras">Refresh</button>
+                <!--<button id="refresh-cameras">Refresh</button>-->
             </div>
             
             <div class="form-group">
-                <label for="interval-input">Interval (seconds):</label>
-                <input type="number" id="interval-input" min="1" value="5">
+                <label for="interval-input">Interval:</label>
+                <div class="slider-container">
+                    <input type="range" id="interval-input" min="1" max="300" step="1" value="5">
+                    <span id="interval-value" class="slider-value">5</span>
+                </div>
             </div>
             
             <div class="form-group">
-                <label>
-                    <input type="checkbox" id="auto-mode-checkbox">
-                    Auto start/stop with activity
-                </label>
-            </div>
-            
-            <div class="form-group">
-                <button id="start-button">Start Capture</button>
-                <button id="stop-button" class="secondary" disabled>Stop Capture</button>
-                <button id="test-button">Test Capture</button>
+                <button id="start-button" class="icon-button" title="Start Capture">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </button>
+                <button id="stop-button" class="icon-button secondary" disabled title="Stop Capture">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="6" y="6" width="12" height="12" rx="1"></rect>
+                    </svg>
+                </button>
             </div>
         </div>
     </div>
     
-    <div class="card sessions-card" style="margin-top: 20px;">
+    <div class="card sessions-card">
         <h2>Timelapse Sessions</h2>
         <div id="sessions-container" class="sessions">
             <!-- Sessions will be dynamically added here -->

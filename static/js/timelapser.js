@@ -7,6 +7,7 @@ const autoModeStatus = document.getElementById('auto-mode-status');
 const cameraSelect = document.getElementById('camera-select');
 const refreshCamerasButton = document.getElementById('refresh-cameras');
 const intervalInput = document.getElementById('interval-input');
+const intervalValue = document.getElementById('interval-value');
 const autoModeCheckbox = document.getElementById('auto-mode-checkbox');
 const startButton = document.getElementById('start-button');
 const stopButton = document.getElementById('stop-button');
@@ -133,7 +134,16 @@ function applyStateToUI() {
     autoModeStatus.textContent = `Auto mode: ${appState.auto_mode ? 'Enabled' : 'Disabled'}`;
     // Set interval input
     if (appState.interval) {
-        intervalInput.value = appState.interval;
+        // Special handling for interval: if it's 1, keep it at 1
+        // Otherwise, ensure it's a multiple of 5
+        let interval = appState.interval;
+        if (interval > 1) {
+            interval = Math.round(interval / 5) * 5;
+            interval = Math.max(5, interval);
+        }
+        
+        intervalInput.value = interval;
+        intervalValue.textContent = interval + 's';
     }
     
     // Set camera settings sliders
@@ -184,10 +194,10 @@ async function saveState() {
 // Set up event listeners
 function setupEventListeners() {
     // Camera refresh button
-    refreshCamerasButton.addEventListener('click', fetchCameras);
+    //refreshCamerasButton.addEventListener('click', fetchCameras);
     
     // Status refresh button
-    refreshStatusButton.addEventListener('click', fetchStatus);
+    //refreshStatusButton.addEventListener('click', fetchStatus);
     
     // Start button
     startButton.addEventListener('click', startTimelapse);
@@ -212,9 +222,39 @@ function setupEventListeners() {
     });
     
     // Interval input
+    intervalInput.addEventListener('input', () => {
+        // Get the current value
+        let value = parseInt(intervalInput.value);
+        
+        // Special handling: if value is 1, keep it at 1
+        // Otherwise, round to the nearest multiple of 5
+        if (value > 1) {
+            value = Math.round(value / 5) * 5;
+            // Ensure minimum of 5 for values greater than 1
+            value = Math.max(5, value);
+        }
+        
+        // Update the displayed value
+        intervalValue.textContent = value + 's';
+    });
+    
     intervalInput.addEventListener('change', () => {
+        // Get the current value
+        let value = parseInt(intervalInput.value);
+        
+        // Special handling: if value is 1, keep it at 1
+        // Otherwise, round to the nearest multiple of 5
+        if (value > 1) {
+            value = Math.round(value / 5) * 5;
+            // Ensure minimum of 5 for values greater than 1
+            value = Math.max(5, value);
+            // Update the slider value to match
+            intervalInput.value = value;
+        }
+        
         // Update state
-        appState.interval = parseInt(intervalInput.value);
+        appState.interval = value;
+        intervalValue.textContent = value + 's';
         saveState();
     });
     
@@ -398,8 +438,17 @@ async function fetchStatus() {
         
         // Update interval if provided
         if (status.interval !== undefined && status.interval !== parseInt(intervalInput.value)) {
-            appState.interval = status.interval;
-            intervalInput.value = status.interval;
+            // Special handling for interval: if it's 1, keep it at 1
+            // Otherwise, ensure it's a multiple of 5
+            let interval = status.interval;
+            if (interval > 1) {
+                interval = Math.round(interval / 5) * 5;
+                interval = Math.max(5, interval);
+            }
+            
+            appState.interval = interval;
+            intervalInput.value = interval;
+            intervalValue.textContent = interval + 's';
         }
         
         // Update camera selection if provided
