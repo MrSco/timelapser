@@ -713,7 +713,7 @@ class WebcamController:
         with self.lock:
             status = {
                 'is_capturing': self.is_capturing,
-                'current_session': self.current_session_dir.split('/')[-1] if self.current_session_dir else None,
+                'current_session': os.path.basename(self.current_session_dir) if self.current_session_dir else None,
                 'interval': self.interval,
                 'auto_mode': self.auto_mode,
                 'selected_camera': self.selected_camera,
@@ -724,7 +724,7 @@ class WebcamController:
             if self.is_capturing and self.current_session_dir:
                 try:
                     # Get the session ID
-                    session_id = self.current_session_dir.split('/')[-1]
+                    session_id = os.path.basename(self.current_session_dir)
                     
                     # Get frames for this session
                     frames = self.get_session_frames(session_id)

@@ -143,7 +143,7 @@ def start_timelapse():
         result = webcam_controller.start_timelapse(camera, interval, auto_mode)
         if result:
             # Get the current session ID from the webcam controller
-            current_session = webcam_controller.current_session_dir.split('/')[-1] if webcam_controller.current_session_dir else None
+            current_session = os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None
             return jsonify({"success": True, "session_id": current_session})
         else:
             return jsonify({"success": False, "error": "Failed to start timelapse"}), 400
@@ -370,7 +370,7 @@ def manage_state():
                 'camera': webcam_controller.selected_camera,
                 'interval': webcam_controller.interval,
                 'is_capturing': webcam_controller.is_capturing,
-                'current_session': webcam_controller.current_session_dir.split('/')[-1] if webcam_controller.current_session_dir else None,
+                'current_session': os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None,
                 'camera_settings': webcam_controller.camera_settings
             }
             return jsonify(state)
@@ -397,7 +397,7 @@ def manage_state():
                 'camera': webcam_controller.selected_camera,
                 'interval': webcam_controller.interval,
                 'is_capturing': webcam_controller.is_capturing,
-                'current_session': webcam_controller.current_session_dir.split('/')[-1] if webcam_controller.current_session_dir else None,
+                'current_session': os.path.basename(webcam_controller.current_session_dir) if webcam_controller.current_session_dir else None,
                 'camera_settings': webcam_controller.camera_settings
             }
             save_state(state)
