@@ -3,7 +3,8 @@ import logging
 import atexit
 import signal
 import json
-from flask import Flask, jsonify, request, send_from_directory, render_template
+import time
+from flask import Flask, jsonify, request, send_from_directory, send_file, render_template
 from dotenv import load_dotenv
 from webcam_controller import WebcamController
 from activity_monitor import ActivityMonitor
@@ -258,13 +259,31 @@ def get_timelapse_image(filename):
 @app.route('/video/<session_id>', methods=['GET'])
 def get_timelapse_video(session_id):
     """Serve a timelapse video"""
+    video_path = os.path.join(timelapse_dir, session_id, f"timelapse_{session_id}.mp4")
+    if os.path.exists(video_path):
+        return send_file(video_path, mimetype='video/mp4')
+    else:
+        return jsonify({"error": "Video not found"}), 404
+
+@app.route('/video_progress/<session_id>', methods=['GET'])
+def get_video_progress(session_id):
+    """Get the progress of video creation for a session"""
     try:
-        # Use the same naming convention as in create_video method
-        video_filename = f"timelapse_{session_id}.mp4"
-        # Serve the video file from the session directory
-        return send_from_directory(os.path.join(timelapse_dir, session_id), video_filename)
+        progress_file = os.path.join(timelapse_dir, session_id, "video_progress.json")
+        if os.path.exists(progress_file):
+            with open(progress_file, 'r') as f:
+                progress_data = json.load(f)
+            
+            # Calculate elapsed time if available and not already provided
+            if 'start_time' in progress_data and 'elapsed_seconds' not in progress_data and progress_data['status'] != 'completed':
+                elapsed = time.time() - progress_data['start_time']
+                progress_data['elapsed_seconds'] = elapsed
+            
+            return jsonify(progress_data)
+        else:
+            return jsonify({"status": "unknown", "progress": 0}), 404
     except Exception as e:
-        logger.error(f"Error serving video: {str(e)}")
+        logger.error(f"Error getting video progress: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/test_capture', methods=['POST'])

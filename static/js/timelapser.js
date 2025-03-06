@@ -1048,8 +1048,20 @@ async function createVideo() {
         videoLoading.classList.remove('hidden');
         createVideoButton.disabled = true;
         
+        // Reset progress bar
+        const progressBar = document.getElementById('video-progress-bar');
+        const progressText = document.getElementById('video-progress-text');
+        const statusText = document.getElementById('video-status-text');
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+        statusText.textContent = 'Creating video...';
+        
+        // Start progress tracking
+        let progressTrackingId = null;
+        
         try {
-            const response = await fetch('/create_video', {
+            // Start the video creation process
+            const createVideoRequest = fetch('/create_video', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1060,6 +1072,16 @@ async function createVideo() {
                 })
             });
             
+            // Start tracking progress immediately
+            progressTrackingId = setInterval(async () => {
+                const isCompleted = await trackVideoProgress(currentSessionId);
+                if (isCompleted) {
+                    clearInterval(progressTrackingId);
+                }
+            }, 1000); // Check progress every second
+            
+            // Wait for the request to complete
+            const response = await createVideoRequest;
             const data = await response.json();
             
             if (data.success) {
@@ -1083,7 +1105,15 @@ async function createVideo() {
             } else {
                 alert('Failed to create video: ' + (data.error || 'Unknown error'));
             }
+        } catch (error) {
+            console.error('Error creating video:', error);
+            alert('Error creating video: ' + error.message);
         } finally {
+            // Clear progress tracking interval
+            if (progressTrackingId) {
+                clearInterval(progressTrackingId);
+            }
+            
             // Hide loading spinner and re-enable button regardless of success or failure
             videoLoading.classList.add('hidden');
             createVideoButton.disabled = false;
@@ -1096,6 +1126,57 @@ async function createVideo() {
         videoLoading.classList.add('hidden');
         createVideoButton.disabled = false;
     }
+}
+
+// Track video creation progress
+async function trackVideoProgress(sessionId) {
+    const progressBar = document.getElementById('video-progress-bar');
+    const progressText = document.getElementById('video-progress-text');
+    const statusText = document.getElementById('video-status-text');
+    
+    try {
+        const response = await fetch(`/video_progress/${sessionId}`);
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Update progress bar
+            const progress = Math.round(data.progress || 0);
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${progress}%`;
+            
+            // Update status text with more detailed information
+            if (data.status === 'completed') {
+                statusText.textContent = 'Video creation completed!';
+                return true; // Signal completion
+            } else if (data.status === 'failed') {
+                statusText.textContent = `Failed: ${data.error || 'Unknown error'}`;
+                return true; // Signal completion (with error)
+            } else if (data.status === 'processing') {
+                // Show more detailed progress information
+                if (data.frame && data.total_frames) {
+                    statusText.textContent = `Processing: Frame ${data.frame}/${data.total_frames}`;
+                }
+                
+                // Show elapsed time if available
+                if (data.start_time) {
+                    const elapsed = Math.round((Date.now() / 1000) - data.start_time);
+                    statusText.textContent += ` (${elapsed}s elapsed)`;
+                }
+            } else {
+                // Show elapsed time if available
+                if (data.elapsed_seconds) {
+                    const elapsed = Math.round(data.elapsed_seconds);
+                    statusText.textContent = `Creating video... (${elapsed}s elapsed)`;
+                } else {
+                    statusText.textContent = 'Creating video...';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error tracking progress:', error);
+    }
+    
+    return false; // Not completed
 }
 
 // Delete session

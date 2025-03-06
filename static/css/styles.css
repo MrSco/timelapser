@@ -696,4 +696,55 @@ label.auto-mode-label input {
 #activity-ignored::before {
     content: "⚠️";
     margin-right: 5px;
+}
+
+/* Add styles for the progress bar */
+.progress-container {
+    width: 100%;
+    background-color: #f1f1f1;
+    border-radius: 4px;
+    margin: 10px 0;
+    height: 20px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: #4CAF50;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+#video-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+#video-loading.hidden {
+    display: none;
+}
+
+#video-loading .spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 2s linear infinite;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#video-status-text, #video-progress-text {
+    margin: 5px 0;
+    font-size: 14px;
 } 

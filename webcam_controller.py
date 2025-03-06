@@ -5,6 +5,7 @@ import subprocess
 import platform
 import logging
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 import numpy as np
@@ -607,9 +608,21 @@ class WebcamController:
                     # Write the full absolute path to each frame
                     f.write(f"file '{os.path.abspath(os.path.join(session_dir, frame))}'\n")
             
+            # Store progress information in a status file
+            status_file = os.path.join(session_dir, "video_progress.json")
+            with open(status_file, 'w') as f:
+                json.dump({
+                    'status': 'starting',
+                    'progress': 0,
+                    'total_frames': len(frames),
+                    'start_time': time.time()
+                }, f)
+            
             # Use ffmpeg with absolute paths instead of changing directory
             try:
-                subprocess.run([
+                # Use a longer timeout for larger sessions (10 minutes)
+                # Use Popen instead of run to capture output in real-time
+                process = subprocess.Popen([
                     'ffmpeg',
                     '-f', 'concat',
                     '-safe', '0',
@@ -617,11 +630,91 @@ class WebcamController:
                     '-r', str(fps),
                     '-c:v', 'libx264',
                     '-pix_fmt', 'yuv420p',
+                    '-progress', 'pipe:1',  # Output progress information to stdout
                     '-y',
                     output_video
-                ], check=True, timeout=180)  # Increased timeout to 3 minutes for larger sessions
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+                
+                # Track progress
+                frame_count = 0
+                total_frames = len(frames)
+                
+                # Start a thread to read stderr for progress updates
+                def read_stderr():
+                    nonlocal frame_count
+                    for line in process.stderr:
+                        if 'frame=' in line:
+                            try:
+                                # Extract frame number
+                                frame_match = re.search(r'frame=\s*(\d+)', line)
+                                if frame_match:
+                                    frame_count = int(frame_match.group(1))
+                                    progress = min(95, (frame_count / total_frames) * 100)
+                                    
+                                    # Update progress file
+                                    with open(status_file, 'w') as f:
+                                        json.dump({
+                                            'status': 'processing',
+                                            'progress': progress,
+                                            'frame': frame_count,
+                                            'total_frames': total_frames,
+                                            'start_time': time.time()
+                                        }, f)
+                            except Exception as e:
+                                logger.error(f"Error parsing FFmpeg output: {str(e)}")
+                
+                # Start a thread to read stdout for progress updates
+                def read_stdout():
+                    nonlocal frame_count
+                    for line in process.stdout:
+                        if 'frame=' in line:
+                            try:
+                                # Extract frame number
+                                frame_match = re.search(r'frame=\s*(\d+)', line)
+                                if frame_match:
+                                    frame_count = int(frame_match.group(1))
+                                    progress = min(95, (frame_count / total_frames) * 100)
+                                    
+                                    # Update progress file
+                                    with open(status_file, 'w') as f:
+                                        json.dump({
+                                            'status': 'processing',
+                                            'progress': progress,
+                                            'frame': frame_count,
+                                            'total_frames': total_frames,
+                                            'start_time': time.time()
+                                        }, f)
+                            except Exception as e:
+                                logger.error(f"Error parsing FFmpeg output: {str(e)}")
+                
+                # Start the threads
+                stdout_thread = threading.Thread(target=read_stdout)
+                stderr_thread = threading.Thread(target=read_stderr)
+                stdout_thread.daemon = True
+                stderr_thread.daemon = True
+                stdout_thread.start()
+                stderr_thread.start()
+                
+                # Wait for the process to complete with timeout
+                process.wait(timeout=600)  # 10 minutes timeout
+                
+                # Update status to completed
+                with open(status_file, 'w') as f:
+                    json.dump({
+                        'status': 'completed',
+                        'progress': 100,
+                        'total_frames': len(frames),
+                        'end_time': time.time()
+                    }, f)
+                    
             except subprocess.SubprocessError as e:
                 logger.error(f"FFmpeg error: {str(e)}")
+                # Update status to failed
+                with open(status_file, 'w') as f:
+                    json.dump({
+                        'status': 'failed',
+                        'error': str(e)
+                    }, f)
                 return False
             
             # Clean up the temporary file
