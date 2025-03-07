@@ -130,7 +130,8 @@ class ActivityMonitor:
                         if self.last_current_file is None:
                             logger.info(f"Initial current file detected: {current_file}")
                         # If the file has changed, notify about new activity
-                        elif current_file != self.last_current_file:
+                        elif current_file != self.last_current_file and self.last_activity_running:
+                            # Only handle file changes if we were already tracking a non-ignored activity
                             logger.info(f"Current file changed from {self.last_current_file} to {current_file}, notifying about new activity")
                             
                             # First stop the current activity
