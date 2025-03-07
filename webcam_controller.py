@@ -12,6 +12,7 @@ import numpy as np
 import cv2  # Import OpenCV globally
 from dotenv import load_dotenv
 import requests
+import glob
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -215,21 +216,22 @@ class WebcamController:
                 logger.warning("No timelapse running")
                 return False
             
-            # Capture one final frame before stopping
-            try:
-                # Generate timestamp and output filename
-                frame_count = len(os.listdir(self.current_session_dir)) + 1
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_file = os.path.join(self.current_session_dir, f"frame_{frame_count:06d}_{timestamp}_final.jpg")
-                
-                # Capture the final frame
-                logger.info("Capturing final frame before stopping timelapse")
-                self.capture_single_frame(output_file=output_file, fast_mode=True)
-                logger.debug(f"Captured final frame to {output_file}")
-            except Exception as e:
-                logger.error(f"Error capturing final frame: {str(e)}")
+            # Capture one final frame with buffer flushing to ensure we get the most recent frame
+            if self.current_session_dir:
+                try:
+                    # Get the next frame number
+                    frame_count = len(glob.glob(os.path.join(self.current_session_dir, "frame_*.jpg"))) + 1
+                    
+                    # Generate timestamp and output filename
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    output_file = os.path.join(self.current_session_dir, f"frame_{frame_count:06d}_{timestamp}_final.jpg")
+                    
+                    # Capture final frame with extra buffer flushing to ensure we get the most recent frame
+                    logger.info("Capturing final frame with buffer flushing")
+                    self.capture_single_frame(output_file=output_file, fast_mode=False)
+                except Exception as e:
+                    logger.error(f"Error capturing final frame: {str(e)}")
             
-            # Now stop the capture loop
             self.is_capturing = False
             if self.capture_thread:
                 self.capture_thread.join(timeout=2.0)
@@ -264,8 +266,8 @@ class WebcamController:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_file = os.path.join(self.current_session_dir, f"frame_{frame_count:06d}_{timestamp}.jpg")
                 
-                # Capture frame with fast_mode=True for better performance in timelapses
-                # We prioritize speed over image quality for timelapse captures
+                # For timelapse captures, we want to balance between speed and getting recent frames
+                # Use fast_mode=True for better performance, but still flush the buffer
                 self.capture_single_frame(output_file=output_file, fast_mode=True)
                 
                 logger.debug(f"Captured frame {frame_count} to {output_file}")
@@ -476,6 +478,16 @@ class WebcamController:
         logger.error("All resolution settings failed, using camera defaults")
         return (int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)), int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
+    def _flush_camera_buffer(self, camera, flush_count):
+        """Flush the camera buffer to get the most recent frame
+        
+        Args:
+            camera: OpenCV VideoCapture object
+            flush_count: Number of frames to flush
+        """
+        for _ in range(flush_count):
+            camera.grab()
+
     def capture_single_frame(self, output_file=None, camera=None, return_base64=False, fast_mode=False):
         """Capture a single frame using OpenCV - can be used for both test captures and timelapse captures
         
@@ -500,6 +512,15 @@ class WebcamController:
             # Reduced wait time - only wait if not in fast mode
             if not fast_mode:
                 time.sleep(0.1)  # Reduced from 0.5 to 0.1 seconds
+            
+            # Flush the camera buffer to get the most recent frame
+            # This helps prevent delayed frames in timelapses
+            if not fast_mode:
+                # For non-fast mode, flush more frames for better quality
+                self._flush_camera_buffer(cam, 5)
+            else:
+                # For fast mode, just flush a couple frames to maintain performance
+                self._flush_camera_buffer(cam, 2)
             
             # Capture frame
             ret, frame = cam.read()
