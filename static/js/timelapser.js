@@ -77,27 +77,29 @@ let appState = {
 };
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    // Fetch application state
-    fetchState();
-    
-    // Fetch initial status (which now includes sessions)
-    fetchStatus();
-    
-    // Fetch available cameras
-    fetchCameras();
-    
-    // Set up event listeners
-    setupEventListeners();
-    
-    // Set up regular status polling for UI updates
-    setupStatusPolling();
-    
-    // Initialize tab content
-    const firstTab = document.querySelector('.tab-button[data-tab="tab-camera"]');
-    if (firstTab) {
-        firstTab.classList.add('active');
-        document.getElementById('tab-camera').classList.add('active');
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // Fetch application state first
+        await fetchState();
+        
+        // Then fetch status and cameras
+        await fetchStatus();
+        await fetchCameras();
+        
+        // Set up event listeners
+        setupEventListeners();
+        
+        // Set up regular status polling for UI updates
+        setupStatusPolling();
+        
+        // Initialize tab content
+        const firstTab = document.querySelector('.tab-button[data-tab="tab-camera"]');
+        if (firstTab) {
+            firstTab.classList.add('active');
+            document.getElementById('tab-camera').classList.add('active');
+        }
+    } catch (error) {
+        console.error('Error during initialization:', error);
     }
 });
 
@@ -454,8 +456,11 @@ async function fetchStatus() {
         const status = await response.json();
         
         // Update appState with capturing status and current session
+        // but preserve ignored patterns
+        const preservedPatterns = appState.ignored_patterns;
         appState.is_capturing = status.is_capturing;
         appState.current_session = status.current_session;
+        appState.ignored_patterns = preservedPatterns;  // Restore patterns
         
         // Update status indicator
         if (status.is_capturing) {
