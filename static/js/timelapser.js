@@ -79,9 +79,11 @@ let appState = {
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // log the state
+        console.log('Initializing application state:', appState);
         // Fetch application state first
         await fetchState();
-        
+
         // Then fetch status and cameras
         await fetchStatus();
         await fetchCameras();
