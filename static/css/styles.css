@@ -32,9 +32,14 @@ p {
     justify-content: space-between;
     align-items: center;
     background-color: #f9f9f9;
-    padding: 10px;
+    padding: 5px;
     border-radius: 8px;
     margin-bottom: 10px;
+}
+
+.header-title {
+    display: flex;
+    align-items: center;
 }
 
 .github-icon {
@@ -405,6 +410,7 @@ label.auto-mode-label input {
     button, select, input {
         padding: 4px 6px;
         margin: 3px 0;
+        white-space: nowrap;
     }
 }
 
@@ -598,8 +604,9 @@ label.auto-mode-label input {
     text-align: center;
     background-color: #f0f0f0;
     border-radius: 4px;
-    overflow: hidden;
     max-width: 250px;
+    display: flex;
+    flex-direction: row;
 }
 
 #camera-preview-image {
