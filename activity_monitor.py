@@ -102,52 +102,41 @@ class ActivityMonitor:
                     # Get current file from status
                     current_file = status.get(self.current_file_property)
                     
-                    # Log current file if it exists
-                    #if current_file:
-                    #    logger.info(f"Current file: {current_file}")
+                    # If no activity is running, clear state and stop capture if needed
+                    if not is_running:
+                        if self.last_activity_running:
+                            logger.info("Activity stopped, notifying webcam controller")
+                            self.webcam_controller.activity_stopped()
+                        self.last_activity_running = False
+                        self.last_current_file = None
+                        continue
                     
+                    # At this point, we know is_running is True
                     # Check if this activity should be ignored
-                    if is_running and current_file and self.is_ignored_activity(current_file):
-                        self.last_current_file = current_file
-                        # If we're already capturing, stop it as this is an ignored activity
+                    is_ignored = current_file and self.is_ignored_activity(current_file)
+                    
+                    # Store current file regardless of ignored status
+                    self.last_current_file = current_file
+                    
+                    if is_ignored:
+                        # If we were capturing a non-ignored activity, stop it
                         if self.last_activity_running:
                             logger.info("Stopping capture for ignored activity")
                             self.webcam_controller.activity_stopped()
                             self.last_activity_running = False
-                        continue  # Skip the rest of the processing
-                    
-                    # Handle activity start/stop
-                    if is_running and not self.last_activity_running:
-                        logger.info("Activity started, notifying webcam controller")
-                        self.webcam_controller.activity_started(activity_file=current_file)
-                    elif not is_running and self.last_activity_running:
-                        logger.info("Activity stopped, notifying webcam controller")
-                        self.webcam_controller.activity_stopped()
-                    
-                    # Handle file changes (new activity while already running)
-                    if is_running and current_file:
-                        # If this is the first file we've seen, just store it
-                        if self.last_current_file is None:
-                            logger.info(f"Initial current file detected: {current_file}")
-                        # If the file has changed, notify about new activity
-                        elif current_file != self.last_current_file and self.last_activity_running:
-                            # Only handle file changes if we were already tracking a non-ignored activity
-                            logger.info(f"Current file changed from {self.last_current_file} to {current_file}, notifying about new activity")
-                            
-                            # First stop the current activity
-                            self.webcam_controller.activity_stopped()
-                            
-                            # Then start a new activity
+                    else:
+                        # Non-ignored activity is running
+                        if not self.last_activity_running:
+                            # Either we weren't capturing, or we were ignoring before
+                            logger.info("Activity started or transitioned from ignored, notifying webcam controller")
                             self.webcam_controller.activity_started(activity_file=current_file)
-                    
-                    # Update last status
-                    self.last_activity_running = is_running
-                    # Always store the current file, even if not running
-                    if current_file:
-                        self.last_current_file = current_file
-                    elif not is_running:
-                        # Only clear the current file if the activity is not running and no file is provided
-                        self.last_current_file = None
+                            self.last_activity_running = True
+                        elif current_file != self.last_current_file:
+                            # File changed while running - restart capture
+                            logger.info(f"Current file changed from {self.last_current_file} to {current_file}, notifying about new activity")
+                            self.webcam_controller.activity_stopped()
+                            self.webcam_controller.activity_started(activity_file=current_file)
+                
                 else:
                     logger.warning(f"Failed to get activity status: HTTP {response.status_code}")
             
