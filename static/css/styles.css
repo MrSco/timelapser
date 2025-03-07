@@ -30,7 +30,7 @@ p {
 .container {
     display: flex;
     gap: 10px;
-    height: 90vh;
+    height: calc(100vh - 100px);
     min-height: 300px;
 }
 
@@ -48,12 +48,11 @@ p {
 /* Sessions card specific styling */
 .card:has(#sessions-container),
 .sessions-card {
-    height: 50vh;
+    height: calc(100vh - 100px);
 }
 
 .card-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
 }
@@ -313,8 +312,6 @@ label.auto-mode-label input {
     .container {
         flex-direction: column;
         height: auto;
-        max-height: 90vh;
-        overflow-y: auto;
     }
 
 }
