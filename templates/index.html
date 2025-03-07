@@ -27,24 +27,7 @@
                 <p id="auto-mode-status"></p>
                 <input type="checkbox" id="auto-mode-checkbox">
             </label>
-        </div>
-
-        <div class="card">
-            <div id="camera-preview-section">
-                <h2>Camera Preview</h2>
-                <p class="preview-hint">Most recent capture from test or active session</p>
-                <div class="preview-container">
-                    <img id="camera-preview-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOTk5Ij5ObyBJbWFnZSBBdmFpbGFibGU8L3RleHQ+PHBhdGggZD0iTTE2MCwxMDAgTDI0MCwxMDAgTDI0MCwyMDAgTDE2MCwyMDAgWiIgc3Ryb2tlPSIjOTk5IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48Y2lyY2xlIGN4PSIyMDAiIGN5PSIxNTAiIHI9IjMwIiBzdHJva2U9IiM5OTkiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" alt="Camera preview" title="Click to enlarge">
-                </div>
-                <div class="form-group">
-                    <button id="test-button">Test Capture</button>
-                </div>
-    
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
+            <div class="card-header section-header">
                 <h2>Camera Control</h2>
                 <button id="camera-settings-button" class="icon-button" title="Camera Settings">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -78,13 +61,25 @@
                     </svg>
                 </button>
             </div>
-        </div>
-    </div>
+
+            <div id="camera-preview-section">
+                <h2>Camera Preview</h2>
+                <p class="preview-hint">Most recent capture from test or active session</p>
+                <div class="preview-container">
+                    <img id="camera-preview-image" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgNDAwIDMwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSIyMDAiIHk9IjE1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOTk5Ij5ObyBJbWFnZSBBdmFpbGFibGU8L3RleHQ+PHBhdGggZD0iTTE2MCwxMDAgTDI0MCwxMDAgTDI0MCwyMDAgTDE2MCwyMDAgWiIgc3Ryb2tlPSIjOTk5IiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz48Y2lyY2xlIGN4PSIyMDAiIGN5PSIxNTAiIHI9IjMwIiBzdHJva2U9IiM5OTkiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==" alt="Camera preview" title="Click to enlarge">
+                </div>
+                <div class="form-group">
+                    <button id="test-button">Test Capture</button>
+                </div>
     
-    <div class="card sessions-card">
-        <h2>Timelapse Sessions</h2>
-        <div id="sessions-container" class="sessions">
-            <!-- Sessions will be dynamically added here -->
+            </div>
+        </div>
+        
+        <div class="card sessions-card">
+            <h2>Timelapse Sessions</h2>
+            <div id="sessions-container" class="sessions">
+                <!-- Sessions will be dynamically added here -->
+            </div>
         </div>
     </div>
     

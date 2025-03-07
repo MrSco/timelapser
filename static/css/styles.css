@@ -30,7 +30,7 @@ p {
 .container {
     display: flex;
     gap: 10px;
-    height: calc(40vh - 20px);
+    height: 50vh;
     min-height: 300px;
 }
 
@@ -200,6 +200,11 @@ label.auto-mode-label input {
     margin-right: 10px;
 }
 
+.section-header {
+    border-top: 1px solid #ddd;
+    padding-top: 10px;
+}
+
 .sessions {
     display: flex;
     gap: 15px;
@@ -305,13 +310,10 @@ label.auto-mode-label input {
     .preview-container {
         max-width: 200px;
     }
-}
-
-@media (max-width: 400px) {
     .container {
         flex-direction: column;
         height: auto;
-        max-height: 60vh;
+        max-height: 90vh;
         overflow-y: auto;
     }
 
@@ -501,7 +503,7 @@ label.auto-mode-label input {
     background-color: #f0f0f0;
     border-radius: 4px;
     overflow: hidden;
-    max-width: 20vw;
+    max-width: 250px;
 }
 
 #camera-preview-image {
