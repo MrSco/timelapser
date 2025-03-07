@@ -882,6 +882,13 @@ function resetCameraSettings() {
     saveState();
 }
 
+// Helper function to extract filename without path and extension
+function getDisplayTitle(fullPath) {
+    if (!fullPath) return null;
+    const filename = fullPath.split(/[/\\]/).pop(); // Get the last part after any slashes
+    return filename.replace(/\.[^/.]+$/, ''); // Remove extension
+}
+
 // Helper function to update the sessions list
 function updateSessionsList(sessions, activeSessionId) {
     // If we're currently viewing session details, don't update anything
@@ -930,7 +937,7 @@ function updateSessionsList(sessions, activeSessionId) {
         // Get display title - use activity file if available, otherwise use session ID
         let displayTitle = session.id;
         if (session.info && session.info.activity_file) {
-            displayTitle = session.info.activity_file;
+            displayTitle = getDisplayTitle(session.info.activity_file) || session.id;
         }
         
         sessionInfo.innerHTML = `
@@ -981,7 +988,9 @@ async function viewSessionDetails(sessionId) {
             
             // Get display title - use activity file if available, otherwise use session ID
             if (sessionInfo && sessionInfo.info && sessionInfo.info.activity_file) {
-                displayTitle = sessionInfo.info.activity_file;
+                // Extract just the filename without path and extension
+                const fullPath = sessionInfo.info.activity_file;
+                displayTitle = getDisplayTitle(fullPath) || sessionId;
             }
         }
         
