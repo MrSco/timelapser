@@ -945,10 +945,31 @@ class WebcamController:
                     video_file = os.path.join(session_path, f"timelapse_{item}.mp4")
                     has_video = os.path.exists(video_file)
                     
-                    # Get thumbnail (first frame)
+                    # Get thumbnail (most recent frame)
                     thumbnail = None
                     if frames:
-                        thumbnail = os.path.join(item, sorted(frames)[0])
+                        # Sort frames by timestamp in filename
+                        # Frame filenames have format: frame_000001_YYYYMMDD_HHMMSS.jpg or frame_000001_YYYYMMDD_HHMMSS_final.jpg
+                        # We want to sort by the timestamp part
+                        def get_frame_timestamp(filename):
+                            # Extract the timestamp part from the filename
+                            # Filename format: frame_000001_YYYYMMDD_HHMMSS.jpg or frame_000001_YYYYMMDD_HHMMSS_final.jpg
+                            
+                            # Use regex to extract the timestamp parts
+                            match = re.search(r'_(\d{8})_(\d{6})', filename)
+                            if match:
+                                # Combine the date and time parts
+                                date_part = match.group(1)
+                                time_part = match.group(2)
+                                return f"{date_part}_{time_part}"
+                            
+                            # Fallback to simple sorting if regex doesn't match
+                            return filename
+                        
+                        # Sort frames by timestamp (newest last)
+                        sorted_frames = sorted(frames, key=get_frame_timestamp)
+                        # Use the last frame (most recent) as the thumbnail
+                        thumbnail = os.path.join(item, sorted_frames[-1])
                     
                     sessions.append({
                         'id': item,
@@ -982,8 +1003,22 @@ class WebcamController:
         except Exception as e:
             logger.error(f"Error getting session frames: {str(e)}")
         
-        # Sort by frame number
-        frames.sort(key=lambda x: x['filename'])
+        # Helper function to extract timestamp from filename
+        def get_frame_timestamp(frame):
+            filename = frame['filename']
+            # Use regex to extract the timestamp parts
+            match = re.search(r'_(\d{8})_(\d{6})', filename)
+            if match:
+                # Combine the date and time parts
+                date_part = match.group(1)
+                time_part = match.group(2)
+                return f"{date_part}_{time_part}"
+            
+            # Fallback to simple sorting if regex doesn't match
+            return filename
+        
+        # Sort by timestamp (newest first)
+        frames.sort(key=get_frame_timestamp, reverse=True)
         return frames
     
     def get_status(self):
@@ -1008,8 +1043,9 @@ class WebcamController:
                     frames = self.get_session_frames(session_id)
                     
                     # If we have frames, get the latest one
+                    # Since frames are now sorted newest first, the latest frame is the first one
                     if frames and len(frames) > 0:
-                        latest_frame = frames[-1]
+                        latest_frame = frames[0]
                         status['latest_frame'] = latest_frame['path']
                 except Exception as e:
                     logger.error(f"Error getting latest frame: {str(e)}")

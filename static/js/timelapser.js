@@ -993,7 +993,9 @@ async function viewSessionDetails(sessionId) {
         }
         
         // Add frames (most recent 10)
-        const recentFrames = frames.slice(-10).reverse();
+        // Since frames are now already sorted newest first from the backend,
+        // we can just take the first 10 frames without reversing
+        const recentFrames = frames.slice(0, 10);
         
         recentFrames.forEach(frame => {
             const frameElement = document.createElement('div');
@@ -1001,7 +1003,7 @@ async function viewSessionDetails(sessionId) {
             
             const frameImage = document.createElement('img');
             frameImage.src = `/image/${frame.path}`;
-            frameImage.alt = `Frame ${frame.index}`;
+            frameImage.alt = `Frame ${frame.filename}`;
             frameImage.style.width = '100%';
             
             // Add click event to show preview
