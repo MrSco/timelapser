@@ -30,7 +30,7 @@ p {
 .container {
     display: flex;
     gap: 10px;
-    height: 50vh;
+    height: 90vh;
     min-height: 300px;
 }
 
