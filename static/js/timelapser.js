@@ -92,6 +92,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Set up regular status polling for UI updates
     setupStatusPolling();
+    
+    // Initialize tab content
+    const firstTab = document.querySelector('.tab-button[data-tab="tab-camera"]');
+    if (firstTab) {
+        firstTab.classList.add('active');
+        document.getElementById('tab-camera').classList.add('active');
+    }
 });
 
 // Fetch application state
@@ -267,6 +274,35 @@ function setupEventListeners() {
         appState.interval = value;
         intervalValue.textContent = value + 's';
         saveState();
+    });
+    
+    // Mobile tab navigation
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Get all tab content elements
+            const allTabContent = document.querySelectorAll('.tab-content');
+            
+            // Remove active class from all buttons and content
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            allTabContent.forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Add active class to clicked button
+            button.classList.add('active');
+            
+            // Show corresponding content
+            const tabId = button.getAttribute('data-tab');
+            const targetContent = document.getElementById(tabId);
+            if (targetContent) {
+                targetContent.classList.add('active');
+                
+                // Scroll to top of the tab content
+                targetContent.scrollIntoView({ behavior: 'smooth' });
+                window.scrollTo(0, 0); // Ensure we're at the top of the page
+            }
+        });
     });
     
     // Camera settings sliders
