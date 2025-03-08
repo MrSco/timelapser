@@ -1075,7 +1075,9 @@ async function viewSessionDetails(sessionId) {
             
             if (sessionInfo && sessionInfo.has_video) {
                 // Show video if it exists
-                videoPlayer.src = `/video/${sessionId}`;
+                // Add timestamp to prevent caching
+                const timestamp = new Date().getTime();
+                videoPlayer.src = `/video/${sessionId}?t=${timestamp}`;  // Use the /video endpoint instead of direct path
                 videoContainer.classList.remove('hidden');
                 
                 // Add indicator to the create video button
@@ -1185,16 +1187,22 @@ async function createVideo() {
             }
             
             if (data.success) {
-                // Show video
-                videoPlayer.src = data.video_url;
-                videoContainer.classList.remove('hidden');
+                // Show the video container
+                document.getElementById('video-container').classList.remove('hidden');
                 
-                // Scroll to video container within the overlay
-                videoContainer.scrollIntoView({ behavior: 'smooth' });
+                // Add timestamp to video URL to prevent caching
+                const timestamp = new Date().getTime();
+                const videoPlayer = document.getElementById('video-player');
+                videoPlayer.src = `/video/${currentSessionId}?t=${timestamp}`;  // Use the /video endpoint instead of direct path
                 
-                // Update button text
-                createVideoButton.innerHTML = "Recreate Video";
-                createVideoButton.title = "A video already exists. Click to recreate.";
+                // Reset video player
+                videoPlayer.load();
+                
+                // Hide the loading indicator
+                videoLoading.classList.add('hidden');
+                createVideoButton.classList.remove('hidden');
+                createVideoButton.disabled = false;
+                createVideoButton.title = "";
                 
                 // Show success message
                 if (data.video_existed) {

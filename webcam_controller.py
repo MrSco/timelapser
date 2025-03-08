@@ -751,8 +751,8 @@ class WebcamController:
                     'ffmpeg',
                     '-f', 'concat',
                     '-safe', '0',
-                    '-i', temp_list_file,
                     '-r', str(fps),
+                    '-i', temp_list_file,
                     '-c:v', 'libx264',
                     '-pix_fmt', 'yuv420p',
                     '-progress', 'pipe:1',  # Output progress information to stdout
