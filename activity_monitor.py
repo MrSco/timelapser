@@ -30,6 +30,7 @@ class ActivityMonitor:
         self.target_url = os.getenv('TARGET_API_URL', 'http://localhost:8080')
         self.ws_url = os.getenv('WS_STATUS_URL', '')  # WebSocket URL if using WS
         self.ws_status_endpoint = os.getenv('WS_STATUS_ENDPOINT', '/ws/status')
+        self.ws_data_path = os.getenv('WS_DATA_PATH', 'data')  # Path to data in WS messages
         self.status_endpoint = f"{self.target_url}{os.getenv('STATUS_ENDPOINT', '/status')}"
         self.status_property = os.getenv('STATUS_PROPERTY', 'is_running')
         self.current_file_property = os.getenv('CURRENT_ACTIVITY_PROPERTY', 'current_file')
@@ -129,6 +130,7 @@ class ActivityMonitor:
                     try:
                         message = await websocket.recv()
                         status = json.loads(message)
+                        logger.info(f"Received WebSocket message: {status}")
                         await self._handle_status_update(status)
                     except websockets.ConnectionClosed:
                         logger.warning("WebSocket connection closed")
@@ -144,6 +146,10 @@ class ActivityMonitor:
     async def _handle_status_update(self, status):
         """Handle a status update from either WebSocket or HTTP polling"""
         try:
+            # If using WebSocket, get the data from the nested structure
+            if self.use_websocket and self.ws_data_path in status:
+                status = status[self.ws_data_path]
+
             is_running = status.get(self.status_property, False)
             current_file = status.get(self.current_file_property)
             
