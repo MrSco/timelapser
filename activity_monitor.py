@@ -203,7 +203,7 @@ class ActivityMonitor:
                 
                 logger.info(f"Polling status from {self.target_url}{self.status_endpoint if not self.use_websocket else self.ws_status_endpoint}")
                 # Get activity status from target API
-                response = requests.get(self.status_endpoint, timeout=5)
+                response = requests.get(self.target_url + self.status_endpoint, timeout=5)
                 
                 if response.status_code == 200:
                     status = response.json()

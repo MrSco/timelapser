@@ -132,23 +132,56 @@ class WebcamController:
                     except Exception as e:
                         logger.warning(f"Error using PowerShell to list cameras: {str(e)}")
             elif self.platform == 'Darwin':  # macOS
-                # On macOS, use ffmpeg with AVFoundation
-                result = subprocess.run(
-                    ['ffmpeg', '-f', 'avfoundation', '-list_devices', 'true', '-i', ''],
-                    stderr=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace'
-                )
-                
-                lines = result.stderr.split('\n')
-                for line in lines:
-                    if '[AVFoundation input device]' in line and 'video' in line.lower():
-                        parts = line.split(']')
-                        if len(parts) > 1:
-                            camera_name = parts[1].strip()
-                            self.available_cameras.append(camera_name)
+                # First try using AVFoundation to list devices
+                try:
+                    result = subprocess.run(
+                        ['ffmpeg', '-f', 'avfoundation', '-list_devices', 'true', '-i', ''],
+                        stderr=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace'
+                    )
+                    
+                    lines = result.stderr.split('\n')
+                    for line in lines:
+                        # Look for video devices in AVFoundation output
+                        if '[AVFoundation input device]' in line and 'video' in line.lower():
+                            try:
+                                # Extract device index and name
+                                match = re.search(r'\[(\d+)\].*?((?:FaceTime|USB|HD|Webcam|Camera).*?)(?:\]|$)', line)
+                                if match:
+                                    index, name = match.groups()
+                                    device = f"{index}:{name.strip()}"
+                                    self.available_cameras.append(device)
+                                else:
+                                    # Fallback to just the line content if pattern doesn't match
+                                    parts = line.split(']')
+                                    if len(parts) > 1:
+                                        self.available_cameras.append(parts[1].strip())
+                            except Exception as e:
+                                logger.debug(f"Error parsing camera line: {str(e)}")
+
+                except Exception as e:
+                    logger.warning(f"Error using AVFoundation to list devices: {str(e)}")
+
+                # If no cameras found, try alternative method using system_profiler
+                if not self.available_cameras:
+                    try:
+                        result = subprocess.run(
+                            ['system_profiler', 'SPCameraDataType', '-json'],
+                            capture_output=True,
+                            text=True
+                        )
+                        
+                        if result.stdout.strip():
+                            data = json.loads(result.stdout)
+                            if 'SPCameraDataType' in data:
+                                for camera in data['SPCameraDataType']:
+                                    if '_name' in camera:
+                                        self.available_cameras.append(f"0:{camera['_name']}")
+                    except Exception as e:
+                        logger.warning(f"Error using system_profiler to list cameras: {str(e)}")
         except Exception as e:
             logger.error(f"Error scanning for cameras: {str(e)}")
         
@@ -379,10 +412,25 @@ class WebcamController:
                 else:
                     return self.camera_cache[cache_key]
             
-            # Create new camera if not in cache or no longer valid
+            # Create new camera
             logger.debug(f"Creating new camera for index {camera_index}")
-            cam = cv2.VideoCapture(camera_index)
             
+            if self.platform == 'Darwin':  # macOS specific handling
+                try:
+                    # If camera_index is in format "index:name", extract the index
+                    if isinstance(camera_index, str) and ':' in camera_index:
+                        camera_index = int(camera_index.split(':')[0])
+                    
+                    # On macOS, we need to specify the AVFoundation backend
+                    cam = cv2.VideoCapture()
+                    cam.open(camera_index, cv2.CAP_AVFOUNDATION)
+                except Exception as e:
+                    logger.error(f"Error opening camera with AVFoundation: {str(e)}")
+                    # Fallback to default method
+                    cam = cv2.VideoCapture(camera_index)
+            else:
+                cam = cv2.VideoCapture(camera_index)
+
             if not cam.isOpened():
                 raise Exception(f"Failed to open camera {camera_index}")
             
