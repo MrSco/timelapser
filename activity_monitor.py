@@ -130,7 +130,6 @@ class ActivityMonitor:
                     try:
                         message = await websocket.recv()
                         status = json.loads(message)
-                        logger.info(f"Received WebSocket message: {status}")
                         await self._handle_status_update(status)
                     except websockets.ConnectionClosed:
                         logger.warning("WebSocket connection closed")
