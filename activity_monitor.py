@@ -146,20 +146,33 @@ class ActivityMonitor:
             payload = msg.payload.decode()
             
             if topic.endswith('/state/running'):
+                # Update running state
                 is_running = payload.lower() == 'running'
-                current_file = self.last_current_file
+                if not is_running:
+                    # If activity stops, handle it immediately
+                    status = {
+                        self.status_property: False,
+                        self.current_file_property: None
+                    }
+                    self.last_activity_running = False
+                else:
+                    # If activity starts/is running, wait for current file before acting
+                    self.last_activity_running = True
+                    return
+                
             elif topic.endswith('/pattern/set/state'):
+                # Only process pattern updates if we're in running state
+                if not self.last_activity_running:
+                    return
+                    
                 current_file = payload
-                is_running = self.last_activity_running
+                status = {
+                    self.status_property: True,
+                    self.current_file_property: current_file
+                }
             else:
                 return
 
-            # Create status update format matching existing handler
-            status = {
-                self.status_property: is_running,
-                self.current_file_property: current_file
-            }
-            
             # Use asyncio to handle the status update
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
