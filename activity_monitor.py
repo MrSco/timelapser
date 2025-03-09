@@ -47,11 +47,16 @@ class ActivityMonitor:
         self.current_file_property = os.getenv('CURRENT_ACTIVITY_PROPERTY', 'current_file')
         self.monitor_thread = None
         self.stop_event = threading.Event()
-        self.last_activity_running = False
+        self.is_machine_running = False  # Track actual machine running state
+        self.last_activity_running = False  # Track if we're capturing
         self.last_current_file = None  # Track the last current_file value
         self.ignored_patterns = []  # List of patterns to ignore
         self.ws = None  # WebSocket connection
         self.ws_reconnect_delay = 5  # Seconds to wait before reconnecting WS
+        
+        # Add MQTT state tracking
+        self.mqtt_running_state = None
+        self.mqtt_pattern_state = None
         
         # Determine if we're using WebSocket based on URL
         self.use_websocket = bool(self.ws_url and (self.ws_url.startswith('ws://') or self.ws_url.startswith('wss://')))
@@ -83,7 +88,7 @@ class ActivityMonitor:
             
         for pattern in self.ignored_patterns:
             try:
-                if re.search(pattern, current_file):
+                if re.search(pattern, current_file) or current_file == None or current_file == "" or current_file == "None":
                     #logger.info(f"Ignoring activity matching pattern '{pattern}': {current_file}")
                     return True
             except re.error:
@@ -144,43 +149,53 @@ class ActivityMonitor:
         try:
             topic = msg.topic
             payload = msg.payload.decode()
+            logger.debug(f"MQTT message received - Topic: {topic}, Payload: {payload}")
             
+            # Update the appropriate state based on topic
             if topic.endswith('/state/running'):
-                # Update running state
                 is_running = payload.lower() == 'running'
+                logger.debug(f"Running state update: {is_running}")
+                self.mqtt_running_state = is_running
+                
+                # If not running, we can process immediately to stop capture
                 if not is_running:
-                    # If activity stops, handle it immediately
                     status = {
                         self.status_property: False,
                         self.current_file_property: None
                     }
-                    self.last_activity_running = False
-                else:
-                    # If activity starts/is running, wait for current file before acting
-                    self.last_activity_running = True
+                    self._process_mqtt_status(status)
                     return
                 
             elif topic.endswith('/pattern/set/state'):
-                # Only process pattern updates if we're in running state
-                if not self.last_activity_running:
-                    return
-                    
                 current_file = payload
-                status = {
-                    self.status_property: True,
-                    self.current_file_property: current_file
-                }
+                logger.debug(f"Pattern update: {current_file}")
+                self.mqtt_pattern_state = current_file
+                
             else:
                 return
-
+            
+            # Only process if we have both pieces of information
+            if self.mqtt_running_state is not None and self.mqtt_pattern_state is not None:
+                # Create complete status object
+                status = {
+                    self.status_property: self.mqtt_running_state,
+                    self.current_file_property: self.mqtt_pattern_state if self.mqtt_running_state else None
+                }
+                self._process_mqtt_status(status)
+            
+        except Exception as e:
+            logger.error(f"Error processing MQTT message: {str(e)}")
+    
+    def _process_mqtt_status(self, status):
+        """Process a complete MQTT status update"""
+        try:
             # Use asyncio to handle the status update
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self._handle_status_update(status))
             loop.close()
-            
         except Exception as e:
-            logger.error(f"Error processing MQTT message: {str(e)}")
+            logger.error(f"Error processing MQTT status: {str(e)}")
 
     def start(self):
         """Start the activity monitor thread"""
@@ -263,8 +278,12 @@ class ActivityMonitor:
             if self.use_websocket and self.ws_data_path in status:
                 status = status[self.ws_data_path]
 
+            logger.debug(f"Status update: {status}")
             is_running = status.get(self.status_property, False)
             current_file = status.get(self.current_file_property)
+            
+            # Update machine state
+            self.is_machine_running = is_running
             
             # If no activity is running, clear state and stop capture if needed
             if not is_running:
@@ -276,30 +295,30 @@ class ActivityMonitor:
                 return
             
             # At this point, we know is_running is True
-            # Check if this activity should be ignored
-            is_ignored = current_file and self.is_ignored_activity(current_file)
-            
-            # Store current file regardless of ignored status
+            # Store current file before checking if ignored
             self.last_current_file = current_file
             
-            if is_ignored:
+            # Check if this activity should be ignored
+            if current_file and self.is_ignored_activity(current_file):
+                logger.debug(f"Ignoring activity: {current_file}")
                 # If we were capturing a non-ignored activity, stop it
                 if self.last_activity_running:
                     logger.info("Stopping capture for ignored activity")
                     self.webcam_controller.activity_stopped()
                     self.last_activity_running = False
-            else:
-                # Non-ignored activity is running
-                if not self.last_activity_running:
-                    # Either we weren't capturing, or we were ignoring before
-                    logger.info("Activity started or transitioned from ignored, notifying webcam controller")
-                    self.webcam_controller.activity_started(activity_file=current_file)
-                    self.last_activity_running = True
-                elif current_file != self.last_current_file:
-                    # File changed while running - restart capture
-                    logger.info(f"Current file changed from {self.last_current_file} to {current_file}, notifying about new activity")
-                    self.webcam_controller.activity_stopped()
-                    self.webcam_controller.activity_started(activity_file=current_file)
+                return
+            
+            # Non-ignored activity is running
+            if not self.last_activity_running:
+                # Either we weren't capturing, or we were ignoring before
+                logger.info("Activity started or transitioned from ignored, notifying webcam controller")
+                self.webcam_controller.activity_started(activity_file=current_file)
+                self.last_activity_running = True
+            elif current_file != self.last_current_file:
+                # File changed while running - restart capture
+                logger.info(f"Current file changed from {self.last_current_file} to {current_file}, notifying about new activity")
+                self.webcam_controller.activity_stopped()
+                self.webcam_controller.activity_started(activity_file=current_file)
         
         except Exception as e:
             logger.error(f"Error handling status update: {str(e)}")
