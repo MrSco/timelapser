@@ -60,6 +60,7 @@ let state = {
 };
 
 let currentSessionId = null; // Track the current session ID for downloads
+let sessionsExpanded = false; // Track whether the sessions list is expanded
 
 // Variable to store the polling interval ID
 let statusPollingInterval = null;
@@ -83,11 +84,35 @@ let appState = {
     ignored_patterns: []  // Add ignored patterns to app state
 };
 
+// Function to save sessions expanded state to localStorage
+function saveSessionsExpandedState() {
+    try {
+        localStorage.setItem('sessionsExpanded', sessionsExpanded);
+    } catch (e) {
+        console.error('Error saving sessions expanded state:', e);
+    }
+}
+
+// Function to load sessions expanded state from localStorage
+function loadSessionsExpandedState() {
+    try {
+        const savedState = localStorage.getItem('sessionsExpanded');
+        if (savedState !== null) {
+            sessionsExpanded = savedState === 'true';
+        }
+    } catch (e) {
+        console.error('Error loading sessions expanded state:', e);
+    }
+}
+
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // log the state
         console.log('Initializing application state:', state);
+        
+        // Load sessions expanded state from localStorage
+        loadSessionsExpandedState();
         
         // Fetch application state first
         await fetchState();
@@ -327,6 +352,16 @@ function setupEventListeners() {
                 // Scroll to top of the tab content
                 targetContent.scrollIntoView({ behavior: 'smooth' });
                 window.scrollTo(0, 0); // Ensure we're at the top of the page
+                
+                // Reset sessions expanded state when switching to sessions tab
+                if (tabId === 'tab-sessions') {
+                    // Only reset if we're not already expanded
+                    if (sessionsExpanded) {
+                        sessionsExpanded = false;
+                        saveSessionsExpandedState();
+                        fetchStatus(); // Refresh the sessions list
+                    }
+                }
             }
         });
     });
@@ -932,10 +967,17 @@ function updateSessionsList(sessions, activeSessionId) {
         return;
     }
     
-    // Add session cards
-    sessions.forEach(session => {
+    // Determine if we need a "Show More" button (more than 5 sessions)
+    const showMoreNeeded = sessions.length > 5 && !sessionsExpanded;
+    
+    // Get the sessions to display initially
+    const initialSessions = showMoreNeeded ? sessions.slice(0, 5) : sessions;
+    const remainingSessions = showMoreNeeded ? sessions.slice(5) : [];
+    
+    // Function to create a session card
+    const createSessionCard = (session) => {
         // Skip invalid sessions
-        if (!session || !session.id) return;
+        if (!session || !session.id) return null;
         
         const sessionCard = document.createElement('div');
         sessionCard.className = 'session-card';
@@ -994,8 +1036,95 @@ function updateSessionsList(sessions, activeSessionId) {
         }
         
         sessionCard.appendChild(buttonContainer);
-        sessionsContainer.appendChild(sessionCard);
+        return sessionCard;
+    };
+    
+    // Add initial session cards
+    initialSessions.forEach(session => {
+        const sessionCard = createSessionCard(session);
+        if (sessionCard) {
+            sessionsContainer.appendChild(sessionCard);
+        }
     });
+    
+    // Add "Show More" button if needed
+    if (showMoreNeeded) {
+        const showMoreContainer = document.createElement('div');
+        showMoreContainer.className = 'show-more-container';
+        showMoreContainer.style.textAlign = 'center';
+        showMoreContainer.style.marginTop = '15px';
+        
+        const showMoreButton = document.createElement('button');
+        showMoreButton.textContent = `Show More (${remainingSessions.length} more)`;
+        showMoreButton.className = 'show-more-button';
+        
+        showMoreButton.addEventListener('click', () => {
+            // Set the expanded state to true
+            sessionsExpanded = true;
+            saveSessionsExpandedState();
+            
+            // Remove the show more button
+            showMoreContainer.remove();
+            
+            // Add the remaining sessions
+            remainingSessions.forEach(session => {
+                const sessionCard = createSessionCard(session);
+                if (sessionCard) {
+                    sessionsContainer.appendChild(sessionCard);
+                }
+            });
+            
+            // Add a "Show Less" button
+            const showLessContainer = document.createElement('div');
+            showLessContainer.className = 'show-less-container';
+            showLessContainer.style.textAlign = 'center';
+            showLessContainer.style.marginTop = '15px';
+            
+            const showLessButton = document.createElement('button');
+            showLessButton.textContent = 'Show Less';
+            showLessButton.className = 'show-less-button';
+            
+            showLessButton.addEventListener('click', () => {
+                // Set the expanded state to false
+                sessionsExpanded = false;
+                saveSessionsExpandedState();
+                
+                // Refresh the sessions list (which will revert to showing only 5)
+                updateSessionsList(sessions, activeSessionId);
+            });
+            
+            showLessContainer.appendChild(showLessButton);
+            sessionsContainer.appendChild(showLessContainer);
+        });
+        
+        showMoreContainer.appendChild(showMoreButton);
+        sessionsContainer.appendChild(showMoreContainer);
+    }
+    
+    // If sessions are expanded but we're showing all sessions now, add a "Show Less" button
+    // This handles the case where sessions were expanded but now there are 5 or fewer sessions
+    if (sessionsExpanded && !showMoreNeeded && sessions.length > 0) {
+        const showLessContainer = document.createElement('div');
+        showLessContainer.className = 'show-less-container';
+        showLessContainer.style.textAlign = 'center';
+        showLessContainer.style.marginTop = '15px';
+        
+        const showLessButton = document.createElement('button');
+        showLessButton.textContent = 'Show Less';
+        showLessButton.className = 'show-less-button';
+        
+        showLessButton.addEventListener('click', () => {
+            // Set the expanded state to false
+            sessionsExpanded = false;
+            saveSessionsExpandedState();
+            
+            // Refresh the sessions list
+            updateSessionsList(sessions, activeSessionId);
+        });
+        
+        showLessContainer.appendChild(showLessButton);
+        sessionsContainer.appendChild(showLessContainer);
+    }
 }
 
 // View session details
@@ -1070,10 +1199,10 @@ async function viewSessionDetails(sessionId) {
             return;
         }
         
-        // Add frames (most recent 10)
+        // Add frames (most recent 5)
         // Since frames are now already sorted newest first from the backend,
-        // we can just take the first 10 frames without reversing
-        const recentFrames = frames.slice(0, 10);
+        // we can just take the first 5 frames without reversing
+        const recentFrames = frames.slice(0, 5);
         
         recentFrames.forEach(frame => {
             const frameElement = document.createElement('div');
