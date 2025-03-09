@@ -1700,43 +1700,125 @@ function downloadSessionFrames() {
         return;
     }
     
-    // Show loading indicator
+    // Get the FPS value from the input
+    const fpsInput = document.getElementById('fps-input');
+    const fps = fpsInput ? parseInt(fpsInput.value) || 30 : 30;
+    
+    // Show initial loading indicator
     const downloadButton = document.getElementById('download-frames-button');
     const originalText = downloadButton.innerHTML;
     downloadButton.innerHTML = `
         <div class="spinner" style="width: 16px; height: 16px;"></div>
-        Preparing ZIP...
+        Checking...
     `;
     downloadButton.disabled = true;
     
-    // Create a download link and trigger it
-    const downloadUrl = `/download_frames/${currentSessionId}?fps=${fpsInput.value}`;
-    
-    // Use fetch to start the download and show progress
-    fetch(downloadUrl)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+    // First check if a ZIP file already exists
+    fetch(`/check_zip_exists/${currentSessionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.exists) {
+                // Ask the user if they want to use the existing ZIP or create a new one
+                downloadButton.innerHTML = originalText;
+                downloadButton.disabled = false;
+                
+                const useExisting = confirm(
+                    `An existing ZIP file was found (${data.size_formatted}, created on ${data.modified_time}).\n\n` +
+                    `Do you want to use this existing file?\n\n` +
+                    `- Click OK to use the existing ZIP file\n` +
+                    `- Click Cancel to create a new ZIP file with current settings`
+                );
+                
+                if (useExisting) {
+                    // Use the existing ZIP file
+                    startDownload(false);
+                } else {
+                    // Create a new ZIP file
+                    startDownload(true);
+                }
+            } else {
+                // No existing ZIP file, create a new one
+                startDownload(false);
             }
-            
-            // Create a download link and trigger it
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `${currentSessionId}_frames.zip`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            // Reset button
-            downloadButton.innerHTML = originalText;
-            downloadButton.disabled = false;
         })
         .catch(error => {
-            console.error('Error downloading frames:', error);
+            console.error('Error checking if ZIP exists:', error);
             downloadButton.innerHTML = originalText;
             downloadButton.disabled = false;
-            alert('Error preparing ZIP file. Please try again.');
+            alert('Error checking if ZIP file exists. Please try again.');
         });
+    
+    // Function to start the download process
+    function startDownload(forceNew) {
+        // Show loading indicator
+        downloadButton.innerHTML = `
+            <div class="spinner" style="width: 16px; height: 16px;"></div>
+            Preparing ZIP... 0%
+        `;
+        downloadButton.disabled = true;
+        
+        // Create the download URL with the force parameter if needed
+        const downloadUrl = `/download_frames/${currentSessionId}?fps=${fps}${forceNew ? '&force=true' : ''}`;
+        
+        // Start polling for progress
+        let progressInterval = setInterval(() => {
+            fetch(`/zip_progress/${currentSessionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === "completed") {
+                        clearInterval(progressInterval);
+                        downloadButton.innerHTML = `
+                            <div class="spinner" style="width: 16px; height: 16px;"></div>
+                            Downloading...
+                        `;
+                        
+                        // Use a more reliable method for downloading large files
+                        // Instead of creating a link and clicking it, open in a new tab/window
+                        // This helps avoid the Content-Length mismatch error
+                        window.open(downloadUrl, '_blank');
+                        
+                        // Reset button after a short delay
+                        setTimeout(() => {
+                            downloadButton.innerHTML = originalText;
+                            downloadButton.disabled = false;
+                        }, 1000);
+                    } else if (data.status === "error") {
+                        clearInterval(progressInterval);
+                        downloadButton.innerHTML = originalText;
+                        downloadButton.disabled = false;
+                        alert('Error preparing ZIP file: ' + (data.message || 'Unknown error'));
+                    } else {
+                        // Update progress
+                        const progress = data.progress || 0;
+                        downloadButton.innerHTML = `
+                            <div class="spinner" style="width: 16px; height: 16px;"></div>
+                            Preparing ZIP... ${progress}%
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking zip progress:', error);
+                    // Don't clear the interval or reset the button on network errors
+                    // Just continue polling
+                });
+        }, 1000);
+        
+        // Use fetch to start the download process
+        fetch(downloadUrl, { method: 'HEAD' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                
+                // The actual download will be triggered by the progress polling
+                // when it detects that the ZIP is complete
+            })
+            .catch(error => {
+                console.error('Error checking download availability:', error);
+                // Don't clear the interval here, as the file might still be being created
+                // The progress polling will handle the download when it's ready
+            });
+    }
 }
 
 

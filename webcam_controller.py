@@ -1243,7 +1243,7 @@ class WebcamController:
         
         Args:
             session_id: Session ID
-            output_file: File-like object to write the zip to (optional)
+            output_file: File-like object or path to write the zip to
             fps: Frames per second for the conversion scripts (default: 30)
             
         Returns:
@@ -1263,20 +1263,51 @@ class WebcamController:
                 return False
             
             # Determine if we're writing to a file or a file-like object
-            using_file_object = output_file is not None
+            using_file_object = output_file is not None and hasattr(output_file, 'write')
             
             # If output_file is None, create a zip file in the session directory
-            if not using_file_object:
+            if not using_file_object and output_file is None:
                 output_file = os.path.join(session_dir, f"{session_id}_frames.zip")
             
-            # Create the zip file
-            with zipfile.ZipFile(output_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                # Add all frames to the zip
-                for frame in frames:
+            # Progress tracking file
+            progress_file = os.path.join(session_dir, "zip_progress.json")
+            
+            # Function to update progress
+            def update_progress(progress, status="processing"):
+                try:
+                    with open(progress_file, 'w') as f:
+                        json.dump({
+                            "status": status,
+                            "progress": progress,
+                            "total_frames": len(frames),
+                            "processed_frames": int(len(frames) * progress / 100)
+                        }, f)
+                except Exception as e:
+                    logger.error(f"Error updating progress: {str(e)}")
+            
+            # Initialize progress
+            update_progress(0)
+            
+            # Use a lower compression level for better performance
+            compression = zipfile.ZIP_DEFLATED
+            compression_level = 1  # 1=fastest, 9=best compression
+            
+            # Create the zip file with lower compression for better performance
+            with zipfile.ZipFile(output_file, 'w', compression, compresslevel=compression_level) as zipf:
+                # Add frames to the zip
+                frame_count = len(frames)
+                for i, frame in enumerate(frames):
+                    if i % 10 == 0:  # Update progress every 10 frames
+                        progress = 5 + int(85 * i / frame_count)  # 5-90% for frame addition
+                        update_progress(progress)
+                        logger.info(f"Adding frame {i+1}/{frame_count} to zip ({progress}%)")
+                    
                     frame_path = os.path.join(session_dir, frame)
                     # Add the frame with a path relative to the frames directory
                     zipf.write(frame_path, os.path.join('frames', frame))
                 
+                # Update progress to 90%
+                update_progress(90)
                 
                 # Create Windows batch script
                 batch_script = f"""@echo off
@@ -1412,7 +1443,26 @@ If you encounter issues with the conversion scripts:
 """
                 zipf.writestr('README.txt', readme)
             
+            # Make sure the file exists and is the expected size
+            if not os.path.exists(output_file):
+                logger.error(f"ZIP file was not created: {output_file}")
+                return False
+                
+            # Get the file size for logging
+            try:
+                file_size = os.path.getsize(output_file)
+                logger.info(f"Created ZIP file: {output_file}, size: {file_size} bytes")
+                
+                # Ensure the file is fully written to disk
+                import time
+                time.sleep(0.5)  # Short delay to ensure file is fully flushed to disk
+            except Exception as e:
+                logger.error(f"Error checking ZIP file: {str(e)}")
+            
             logger.info(f"Created frames zip for session {session_id}")
+            
+            # Update progress to 100% (completed)
+            update_progress(100, "completed")
             
             # Return the path to the zip file if we created it on disk
             if not using_file_object:
@@ -1422,6 +1472,18 @@ If you encounter issues with the conversion scripts:
             
         except Exception as e:
             logger.error(f"Error creating frames zip: {str(e)}")
+            
+            # Update progress to indicate error
+            try:
+                with open(progress_file, 'w') as f:
+                    json.dump({
+                        "status": "error",
+                        "progress": 0,
+                        "message": str(e)
+                    }, f)
+            except Exception as write_err:
+                logger.error(f"Error updating progress file: {str(write_err)}")
+                
             return False
 
 # Create a singleton instance

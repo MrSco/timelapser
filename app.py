@@ -11,6 +11,7 @@ from flask import Flask, jsonify, request, send_from_directory, send_file, rende
 from dotenv import load_dotenv
 from webcam_controller import WebcamController
 from activity_monitor import ActivityMonitor
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -549,6 +550,9 @@ def download_frames_zip(session_id):
         # Get FPS from query parameter, default to 30
         fps = request.args.get('fps', 30, type=int)
         
+        # Get force parameter to force creation of a new ZIP
+        force_new = request.args.get('force', 'false').lower() == 'true'
+        
         # Validate session_id
         if not session_id or '..' in session_id or not session_id.startswith('timelapse_'):
             return jsonify({"error": "Invalid session ID"}), 400
@@ -556,30 +560,129 @@ def download_frames_zip(session_id):
         session_dir = os.path.join(timelapse_dir, session_id)
         if not os.path.exists(session_dir):
             return jsonify({"error": "Session not found"}), 404
+        
+        # Check if a cached zip file already exists
+        zip_path = os.path.join(session_dir, f"{session_id}_frames.zip")
+        use_cached = False
+        
+        if os.path.exists(zip_path) and not force_new:
+            use_cached = True
+            logger.info(f"Using existing zip file for {session_id}")
+        
+        if use_cached:
+            # Use the cached zip file - use direct file path to avoid memory issues
+            return send_file(
+                zip_path,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=f"{session_id}_frames.zip",
+                conditional=True  # Enable conditional responses
+            )
+        else:
+            # If forcing a new ZIP and an old one exists, delete it first
+            if force_new and os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                    logger.info(f"Deleted existing zip file for {session_id} to create a new one")
+                except Exception as e:
+                    logger.error(f"Error deleting existing zip file: {str(e)}")
             
-        # Create a zip file in memory
-        memory_file = io.BytesIO()
-        
-        # Get frames and create zip with the specified FPS
-        result = webcam_controller.create_frames_zip(session_id, memory_file, fps)
-        
-        if not result:
-            return jsonify({"error": "Failed to create zip file"}), 500
+            # Create a progress file to track zip creation
+            progress_file = os.path.join(session_dir, "zip_progress.json")
+            with open(progress_file, 'w') as f:
+                json.dump({"status": "starting", "progress": 0}, f)
             
-        # Seek to the beginning of the file
-        memory_file.seek(0)
-        
-        # Create response with appropriate headers
-        response = make_response(send_file(
-            memory_file,
-            mimetype='application/zip',
-            as_attachment=True,
-            download_name=f"{session_id}_frames.zip"
-        ))
-        
-        return response
+            # Create a zip file on disk instead of in memory
+            logger.info(f"Creating new zip file for {session_id}")
+            
+            # Create the zip file
+            result = webcam_controller.create_frames_zip(session_id, zip_path, fps)
+            
+            if not result:
+                return jsonify({"error": "Failed to create zip file"}), 500
+            
+            # Update progress
+            with open(progress_file, 'w') as f:
+                json.dump({"status": "completed", "progress": 100}, f)
+            
+            # Make sure the file exists and is complete before sending
+            if not os.path.exists(zip_path):
+                return jsonify({"error": "ZIP file was not created properly"}), 500
+                
+            # Get the file size for logging
+            file_size = os.path.getsize(zip_path)
+            logger.info(f"Sending ZIP file: {zip_path}, size: {file_size} bytes")
+            
+            # Use direct file path to avoid memory issues
+            return send_file(
+                zip_path,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=f"{session_id}_frames.zip",
+                conditional=True  # Enable conditional responses
+            )
     except Exception as e:
         logger.error(f"Error creating frames zip: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/zip_progress/<session_id>', methods=['GET'])
+def get_zip_progress(session_id):
+    """Get the progress of zip creation for a session"""
+    try:
+        progress_file = os.path.join(timelapse_dir, session_id, "zip_progress.json")
+        if os.path.exists(progress_file):
+            with open(progress_file, 'r') as f:
+                progress_data = json.load(f)
+            return jsonify(progress_data)
+        else:
+            return jsonify({"status": "unknown", "progress": 0}), 404
+    except Exception as e:
+        logger.error(f"Error getting zip progress: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/check_zip_exists/<session_id>', methods=['GET'])
+def check_zip_exists(session_id):
+    """Check if a ZIP file already exists for a session"""
+    try:
+        # Validate session_id
+        if not session_id or '..' in session_id or not session_id.startswith('timelapse_'):
+            return jsonify({"error": "Invalid session ID"}), 400
+            
+        session_dir = os.path.join(timelapse_dir, session_id)
+        if not os.path.exists(session_dir):
+            return jsonify({"error": "Session not found"}), 404
+        
+        # Check if a zip file already exists
+        zip_path = os.path.join(session_dir, f"{session_id}_frames.zip")
+        
+        if os.path.exists(zip_path):
+            # Get file info
+            file_size = os.path.getsize(zip_path)
+            file_time = os.path.getmtime(zip_path)
+            
+            # Format the time
+            modified_time = datetime.fromtimestamp(file_time).strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Format the size
+            if file_size < 1024:
+                size_str = f"{file_size} B"
+            elif file_size < 1024 * 1024:
+                size_str = f"{file_size / 1024:.1f} KB"
+            elif file_size < 1024 * 1024 * 1024:
+                size_str = f"{file_size / (1024 * 1024):.1f} MB"
+            else:
+                size_str = f"{file_size / (1024 * 1024 * 1024):.1f} GB"
+            
+            return jsonify({
+                "exists": True,
+                "file_size": file_size,
+                "size_formatted": size_str,
+                "modified_time": modified_time
+            })
+        else:
+            return jsonify({"exists": False})
+    except Exception as e:
+        logger.error(f"Error checking if ZIP exists: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def on_exit():
