@@ -16,6 +16,7 @@ import glob
 import zipfile
 import io
 import shutil
+import sys
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -63,6 +64,9 @@ class WebcamController:
         
         # Scan for available cameras
         self.scan_cameras()
+        
+        # Clean up old ZIP files on startup
+        self.cleanup_old_zip_files()
     
     def scan_cameras(self):
         """Scan for available camera devices based on platform"""
@@ -1485,6 +1489,61 @@ If you encounter issues with the conversion scripts:
                 logger.error(f"Error updating progress file: {str(write_err)}")
                 
             return False
+
+    def cleanup_old_zip_files(self, max_age_hours=1):
+        """Clean up ZIP files that are older than the specified number of hours
+        
+        Args:
+            max_age_hours: Maximum age of ZIP files in hours (default: 1)
+        """
+        try:
+            logger.info(f"Cleaning up ZIP files older than {max_age_hours} hour(s)")
+            current_time = time.time()
+            max_age_seconds = max_age_hours * 3600
+            
+            # Get all session directories
+            if not os.path.exists(self.timelapse_dir):
+                logger.warning(f"Timelapse directory does not exist: {self.timelapse_dir}")
+                return
+                
+            session_dirs = [d for d in os.listdir(self.timelapse_dir) 
+                           if os.path.isdir(os.path.join(self.timelapse_dir, d))]
+            
+            zip_count = 0
+            deleted_count = 0
+            deleted_size = 0
+            
+            for session_id in session_dirs:
+                session_dir = os.path.join(self.timelapse_dir, session_id)
+                
+                # Find all ZIP files in the session directory
+                zip_files = [f for f in os.listdir(session_dir) if f.endswith('.zip')]
+                
+                for zip_file in zip_files:
+                    zip_path = os.path.join(session_dir, zip_file)
+                    zip_count += 1
+                    
+                    # Check if the file is older than max_age_hours
+                    file_time = os.path.getmtime(zip_path)
+                    file_age = current_time - file_time
+                    
+                    if file_age > max_age_seconds:
+                        # Get file size for logging
+                        file_size = os.path.getsize(zip_path)
+                        deleted_size += file_size
+                        
+                        # Delete the file
+                        os.remove(zip_path)
+                        deleted_count += 1
+                        logger.info(f"Deleted old ZIP file: {zip_path} (Age: {file_age/3600:.1f} hours, Size: {file_size/1024/1024:.1f} MB)")
+            
+            if deleted_count > 0:
+                logger.info(f"Cleanup complete: Deleted {deleted_count} of {zip_count} ZIP files (Total: {deleted_size/1024/1024:.1f} MB)")
+            else:
+                logger.info(f"Cleanup complete: No old ZIP files to delete (Found: {zip_count} ZIP files)")
+                
+        except Exception as e:
+            logger.error(f"Error cleaning up old ZIP files: {str(e)}")
 
 # Create a singleton instance
 webcam_controller = WebcamController() 
