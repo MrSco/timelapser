@@ -860,6 +860,47 @@ button#test-button {
 }
 
 #video-status-text, #video-progress-text {
-    margin: 5px 0;
+    margin-left: 10px;
     font-size: 14px;
+}
+
+.download-section {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+}
+
+.download-section h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.download-buttons {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+.download-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: #4a6da7;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.download-button:hover {
+    background-color: #3a5d97;
+}
+
+.download-button svg {
+    width: 16px;
+    height: 16px;
 } 

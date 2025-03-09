@@ -51,8 +51,15 @@ const ignoredPatternsList = document.getElementById('ignored-patterns-list');
 const newPatternInput = document.getElementById('new-pattern-input');
 const addPatternButton = document.getElementById('add-pattern-button');
 
-// Current session ID for details view
-let currentSessionId = null;
+// Global variables
+let state = {
+    isCapturing: false,
+    currentSession: null,
+    autoMode: false,
+    ignoredPatterns: []
+};
+
+let currentSessionId = null; // Track the current session ID for downloads
 
 // Variable to store the polling interval ID
 let statusPollingInterval = null;
@@ -76,14 +83,15 @@ let appState = {
     ignored_patterns: []  // Add ignored patterns to app state
 };
 
-// Initialize
+// Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // log the state
-        console.log('Initializing application state:', appState);
+        console.log('Initializing application state:', state);
+        
         // Fetch application state first
         await fetchState();
-
+        
         // Then fetch status and cameras
         await fetchStatus();
         await fetchCameras();
@@ -100,6 +108,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             firstTab.classList.add('active');
             document.getElementById('tab-camera').classList.add('active');
         }
+        
+        // Enable drag-to-scroll for frames container
+        enableDragToScroll(document.getElementById('frames-container'));
+        
+        // Enable drag-to-scroll for sessions container
+        enableDragToScroll(document.getElementById('sessions-container'));
+        
+        // Pre-initialize the selected camera
+        const cameraSelect = document.getElementById('camera-select');
+        if (cameraSelect.options.length > 0) {
+            await preInitializeCamera(cameraSelect.value);
+        }
+        
+        console.log('Timelapser initialized');
     } catch (error) {
         console.error('Error during initialization:', error);
     }
@@ -435,6 +457,10 @@ function setupEventListeners() {
     if (cancelVideoButton) {
         cancelVideoButton.addEventListener('click', cancelVideoCreation);
     }
+    
+    // Download buttons
+    document.getElementById('download-video-button').addEventListener('click', downloadSessionVideo);
+    document.getElementById('download-frames-button').addEventListener('click', downloadSessionFrames);
 }
 
 // Setup regular status polling for UI updates
@@ -1648,6 +1674,69 @@ function updateIgnoredPatternsList() {
         emptyMessage.textContent = 'No ignored patterns. Add patterns below to ignore specific activities.';
         ignoredPatternsList.appendChild(emptyMessage);
     }
+}
+
+// Function to download the session video
+function downloadSessionVideo() {
+    if (!currentSessionId) {
+        console.error('No session ID available for download');
+        return;
+    }
+    
+    // Create a download link and trigger it
+    const downloadUrl = `/download_video/${currentSessionId}`;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `timelapse_${currentSessionId}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Function to download the session frames as a ZIP
+function downloadSessionFrames() {
+    if (!currentSessionId) {
+        console.error('No session ID available for download');
+        return;
+    }
+    
+    // Show loading indicator
+    const downloadButton = document.getElementById('download-frames-button');
+    const originalText = downloadButton.innerHTML;
+    downloadButton.innerHTML = `
+        <div class="spinner" style="width: 16px; height: 16px;"></div>
+        Preparing ZIP...
+    `;
+    downloadButton.disabled = true;
+    
+    // Create a download link and trigger it
+    const downloadUrl = `/download_frames/${currentSessionId}?fps=${fpsInput.value}`;
+    
+    // Use fetch to start the download and show progress
+    fetch(downloadUrl)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            
+            // Create a download link and trigger it
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `${currentSessionId}_frames.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Reset button
+            downloadButton.innerHTML = originalText;
+            downloadButton.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error downloading frames:', error);
+            downloadButton.innerHTML = originalText;
+            downloadButton.disabled = false;
+            alert('Error preparing ZIP file. Please try again.');
+        });
 }
 
 

@@ -13,6 +13,9 @@ import cv2  # Import OpenCV globally
 from dotenv import load_dotenv
 import requests
 import glob
+import zipfile
+import io
+import shutil
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -1233,6 +1236,192 @@ class WebcamController:
             return True
         except Exception as e:
             logger.error(f"Error setting resolution: {str(e)}")
+            return False
+
+    def create_frames_zip(self, session_id, output_file=None, fps=30):
+        """Create a zip file containing all frames for a session with conversion scripts
+        
+        Args:
+            session_id: Session ID
+            output_file: File-like object to write the zip to (optional)
+            fps: Frames per second for the conversion scripts (default: 30)
+            
+        Returns:
+            Path to the zip file if output_file is None, otherwise True if successful
+        """
+        try:
+            session_dir = os.path.join(self.timelapse_dir, session_id)
+            if not os.path.exists(session_dir):
+                logger.error(f"Session directory not found: {session_dir}")
+                return False
+            
+            # Get all jpg files in the directory
+            frames = sorted([f for f in os.listdir(session_dir) if f.endswith('.jpg')])
+            
+            if not frames:
+                logger.error(f"No frames found in {session_dir}")
+                return False
+            
+            # Determine if we're writing to a file or a file-like object
+            using_file_object = output_file is not None
+            
+            # If output_file is None, create a zip file in the session directory
+            if not using_file_object:
+                output_file = os.path.join(session_dir, f"{session_id}_frames.zip")
+            
+            # Create the zip file
+            with zipfile.ZipFile(output_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Add all frames to the zip
+                for frame in frames:
+                    frame_path = os.path.join(session_dir, frame)
+                    # Add the frame with a path relative to the frames directory
+                    zipf.write(frame_path, os.path.join('frames', frame))
+                
+                
+                # Create Windows batch script
+                batch_script = f"""@echo off
+echo Converting frames to video...
+echo Using FPS: {fps}
+
+REM Check if ffmpeg is in PATH
+where ffmpeg >nul 2>nul
+if %ERRORLEVEL% neq 0 (
+    echo FFmpeg not found in PATH. Please install FFmpeg or add it to your PATH.
+    echo You can download FFmpeg from https://ffmpeg.org/download.html
+    pause
+    exit /b 1
+)
+
+REM Create output directory if it doesn't exist
+if not exist output mkdir output
+
+REM Create a temporary file list for FFmpeg
+echo Creating file list for FFmpeg...
+del frames_list.txt 2>nul
+for %%f in (frames\*.jpg) do echo file '%%f' >> frames_list.txt
+
+REM Run FFmpeg to create video using the file list
+ffmpeg -r {fps} -f concat -safe 0 -i frames_list.txt -c:v libx264 -pix_fmt yuv420p -crf 23 output/timelapse_{session_id}.mp4
+
+echo.
+if %ERRORLEVEL% equ 0 (
+    echo Video created successfully: output/timelapse_{session_id}.mp4
+) else (
+    echo Error creating video. Please check if FFmpeg is installed correctly.
+)
+
+REM Clean up the temporary file
+del frames_list.txt
+
+pause
+"""
+                zipf.writestr('convert_to_video.bat', batch_script)
+
+                # Create shell script for Linux/Mac
+                shell_script = f"""#!/bin/bash
+echo "Converting frames to video..."
+echo "Using FPS: {fps}"
+
+# Check if ffmpeg is installed
+if ! command -v ffmpeg &> /dev/null; then
+    echo "FFmpeg not found. Please install FFmpeg."
+    echo "On Ubuntu/Debian: sudo apt-get install ffmpeg"
+    echo "On macOS with Homebrew: brew install ffmpeg"
+    exit 1
+fi
+
+# Create output directory if it doesn't exist
+mkdir -p output
+
+# Try first method with glob pattern
+echo "Trying method 1 (glob pattern)..."
+if ffmpeg -framerate {fps} -pattern_type glob -i 'frames/frame_*.jpg' -c:v libx264 -pix_fmt yuv420p -crf 23 output/timelapse_{session_id}.mp4; then
+    echo "Video created successfully: output/timelapse_{session_id}.mp4"
+else
+    echo "Method 1 failed. Trying method 2 (file list)..."
+    
+    # Create a file list for FFmpeg
+    find frames -name "*.jpg" | sort > frames_list.txt
+    
+    # Prepare the file list in the format FFmpeg expects
+    sed -i 's/^/file \\'/g' frames_list.txt
+    sed -i 's/$/\\'/g' frames_list.txt
+    
+    # Run FFmpeg with the file list
+    if ffmpeg -framerate {fps} -f concat -safe 0 -i frames_list.txt -c:v libx264 -pix_fmt yuv420p -crf 23 output/timelapse_{session_id}.mp4; then
+        echo "Video created successfully: output/timelapse_{session_id}.mp4"
+    else
+        echo "Method 2 failed. Trying method 3 (sequence pattern)..."
+        
+        # Try with sequence pattern by changing to the frames directory
+        (cd frames && ffmpeg -framerate {fps} -i 'frame_%06d_*.jpg' -c:v libx264 -pix_fmt yuv420p -crf 23 ../output/timelapse_{session_id}.mp4)
+        
+        if [ $? -eq 0 ]; then
+            echo "Video created successfully: output/timelapse_{session_id}.mp4"
+        else
+            echo "All methods failed. Please check if FFmpeg is installed correctly."
+        fi
+    fi
+    
+    # Clean up
+    rm -f frames_list.txt
+fi
+
+read -p "Press Enter to exit..."
+"""
+                zipf.writestr('convert_to_video.sh', shell_script)
+                
+                # Add a README file
+                readme = f"""# Timelapse Frames - {session_id}
+
+This archive contains:
+- {len(frames)} image frames in the 'frames' directory
+- Scripts to convert the frames to a video
+
+## Instructions
+
+### Windows
+1. Extract all files from this zip archive
+2. Double-click on 'convert_to_video.bat'
+3. If that doesn't work, try 'convert_to_video_alt.bat'
+4. The video will be created in the 'output' directory
+
+### macOS / Linux
+1. Extract all files from this zip archive
+2. Open Terminal and navigate to the extracted directory
+3. Make the script executable: chmod +x convert_to_video.sh
+4. Run the script: ./convert_to_video.sh
+5. The video will be created in the 'output' directory
+
+## Requirements
+- FFmpeg must be installed on your system
+- Windows: Download from https://ffmpeg.org/download.html
+- macOS: Install with Homebrew: brew install ffmpeg
+- Linux: Install with your package manager (e.g., apt-get install ffmpeg)
+
+## Video Settings
+- FPS (Frames Per Second): {fps}
+- Codec: H.264
+- Container: MP4
+
+## Troubleshooting
+If you encounter issues with the conversion scripts:
+1. Make sure FFmpeg is installed and in your system PATH
+2. Try the alternative script if the main one fails
+3. You can also run FFmpeg manually with your preferred settings
+"""
+                zipf.writestr('README.txt', readme)
+            
+            logger.info(f"Created frames zip for session {session_id}")
+            
+            # Return the path to the zip file if we created it on disk
+            if not using_file_object:
+                return output_file
+            else:
+                return True
+            
+        except Exception as e:
+            logger.error(f"Error creating frames zip: {str(e)}")
             return False
 
 # Create a singleton instance

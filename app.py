@@ -4,7 +4,10 @@ import atexit
 import signal
 import json
 import time
-from flask import Flask, jsonify, request, send_from_directory, send_file, render_template
+import zipfile
+import io
+import shutil
+from flask import Flask, jsonify, request, send_from_directory, send_file, render_template, Response, make_response
 from dotenv import load_dotenv
 from webcam_controller import WebcamController
 from activity_monitor import ActivityMonitor
@@ -521,6 +524,62 @@ def cancel_video_creation(session_id):
             }), 404
     except Exception as e:
         logger.error(f"Error cancelling video creation: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/download_video/<session_id>', methods=['GET'])
+def download_timelapse_video(session_id):
+    """Download a timelapse video"""
+    try:
+        video_path = os.path.join(timelapse_dir, session_id, f"timelapse_{session_id}.mp4")
+        if os.path.exists(video_path):
+            # Set the appropriate headers for file download
+            response = make_response(send_file(video_path, mimetype='video/mp4'))
+            response.headers['Content-Disposition'] = f'attachment; filename=timelapse_{session_id}.mp4'
+            return response
+        else:
+            return jsonify({"error": "Video not found"}), 404
+    except Exception as e:
+        logger.error(f"Error downloading video: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/download_frames/<session_id>', methods=['GET'])
+def download_frames_zip(session_id):
+    """Download all frames for a session as a zip file with conversion scripts"""
+    try:
+        # Get FPS from query parameter, default to 30
+        fps = request.args.get('fps', 30, type=int)
+        
+        # Validate session_id
+        if not session_id or '..' in session_id or not session_id.startswith('timelapse_'):
+            return jsonify({"error": "Invalid session ID"}), 400
+            
+        session_dir = os.path.join(timelapse_dir, session_id)
+        if not os.path.exists(session_dir):
+            return jsonify({"error": "Session not found"}), 404
+            
+        # Create a zip file in memory
+        memory_file = io.BytesIO()
+        
+        # Get frames and create zip with the specified FPS
+        result = webcam_controller.create_frames_zip(session_id, memory_file, fps)
+        
+        if not result:
+            return jsonify({"error": "Failed to create zip file"}), 500
+            
+        # Seek to the beginning of the file
+        memory_file.seek(0)
+        
+        # Create response with appropriate headers
+        response = make_response(send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"{session_id}_frames.zip"
+        ))
+        
+        return response
+    except Exception as e:
+        logger.error(f"Error creating frames zip: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def on_exit():
