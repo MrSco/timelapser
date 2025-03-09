@@ -4,3 +4,4 @@ requests
 python-dotenv
 flask
 websockets
+paho-mqtt

@@ -9,6 +9,7 @@ import asyncio
 import websockets
 from urllib.parse import urlparse
 from dotenv import load_dotenv
+import paho.mqtt.client as mqtt
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -27,6 +28,16 @@ class ActivityMonitor:
         
         self.webcam_controller = webcam_controller
         self.poll_interval = poll_interval
+        
+        # MQTT configuration
+        self.mqtt_broker = os.getenv('MQTT_BROKER', 'localhost')
+        self.mqtt_port = int(os.getenv('MQTT_PORT', '1883'))
+        self.mqtt_topic_prefix = os.getenv('MQTT_TOPIC_PREFIX', 'dune_weaver_black')
+        self.mqtt_username = os.getenv('MQTT_USERNAME')
+        self.mqtt_password = os.getenv('MQTT_PASSWORD')
+        self.mqtt_client = None
+        self.use_mqtt = bool(os.getenv('USE_MQTT', 'true').lower() == 'true')
+        
         self.target_url = os.getenv('TARGET_API_URL', 'http://localhost:8080')
         self.ws_url = os.getenv('WS_STATUS_URL', '')  # WebSocket URL if using WS
         self.ws_status_endpoint = os.getenv('WS_STATUS_ENDPOINT', '/ws/status')
@@ -51,6 +62,14 @@ class ActivityMonitor:
         else:
             logger.info(f"HTTP URL: {self.target_url}")
         logger.info(f"Monitoring property: {self.status_property} and file property: {self.current_file_property}")
+        
+        # Determine connection priority
+        if self.use_mqtt:
+            logger.info("Using MQTT for status monitoring")
+        elif self.use_websocket:
+            logger.info(f"Using WebSocket endpoint: {self.ws_url}{self.ws_status_endpoint}")
+        else:
+            logger.info(f"Using HTTP polling: {self.status_endpoint}")
     
     def set_ignored_patterns(self, patterns):
         """Set the list of patterns to ignore"""
@@ -75,6 +94,81 @@ class ActivityMonitor:
                     
         return False
     
+    def _setup_mqtt(self):
+        """Setup MQTT client and connections"""
+        try:
+            self.mqtt_client = mqtt.Client()
+            
+            # Configure authentication if credentials are provided
+            if self.mqtt_username and self.mqtt_password:
+                logger.info(f"Configuring MQTT authentication for user: {self.mqtt_username}")
+                self.mqtt_client.username_pw_set(self.mqtt_username, self.mqtt_password)
+            else:
+                logger.warning("No MQTT credentials provided, connecting without authentication")
+            
+            self.mqtt_client.on_connect = self._on_mqtt_connect
+            self.mqtt_client.on_message = self._on_mqtt_message
+            self.mqtt_client.on_disconnect = self._on_mqtt_disconnect
+            
+            logger.info(f"Connecting to MQTT broker at {self.mqtt_broker}:{self.mqtt_port}")
+            self.mqtt_client.connect(self.mqtt_broker, self.mqtt_port)
+            self.mqtt_client.loop_start()
+        except Exception as e:
+            logger.error(f"Failed to setup MQTT: {str(e)}")
+            self.use_mqtt = False
+            
+    def _on_mqtt_connect(self, client, userdata, flags, rc):
+        """Callback for when MQTT client connects"""
+        logger.info("Connected to MQTT broker")
+        # Subscribe to relevant topics
+        topics = [
+            f"{self.mqtt_topic_prefix}/state/running",
+            f"{self.mqtt_topic_prefix}/pattern/set/state"
+        ]
+        for topic in topics:
+            client.subscribe(topic)
+            logger.info(f"Subscribed to {topic}")
+
+    def _on_mqtt_disconnect(self, client, userdata, rc):
+        """Callback for when MQTT client disconnects"""
+        logger.warning("Disconnected from MQTT broker")
+        if not self.stop_event.is_set():
+            logger.info("Attempting to reconnect...")
+            try:
+                client.reconnect()
+            except Exception as e:
+                logger.error(f"Failed to reconnect to MQTT: {str(e)}")
+
+    def _on_mqtt_message(self, client, userdata, msg):
+        """Handle incoming MQTT messages"""
+        try:
+            topic = msg.topic
+            payload = msg.payload.decode()
+            
+            if topic.endswith('/state/running'):
+                is_running = payload.lower() == 'running'
+                current_file = self.last_current_file
+            elif topic.endswith('/pattern/set/state'):
+                current_file = payload
+                is_running = self.last_activity_running
+            else:
+                return
+
+            # Create status update format matching existing handler
+            status = {
+                self.status_property: is_running,
+                self.current_file_property: current_file
+            }
+            
+            # Use asyncio to handle the status update
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self._handle_status_update(status))
+            loop.close()
+            
+        except Exception as e:
+            logger.error(f"Error processing MQTT message: {str(e)}")
+
     def start(self):
         """Start the activity monitor thread"""
         if self.monitor_thread and self.monitor_thread.is_alive():
@@ -82,10 +176,12 @@ class ActivityMonitor:
             return
         
         logger.info("Starting activity monitor")
-        logger.info(f"Poll interval configured to {self.poll_interval} seconds")
         self.stop_event.clear()
         
-        if self.use_websocket:
+        if self.use_mqtt:
+            self._setup_mqtt()
+            self.monitor_thread = threading.Thread(target=self._mqtt_monitor_loop, daemon=True)
+        elif self.use_websocket:
             self.monitor_thread = threading.Thread(target=self._run_websocket_loop, daemon=True)
         else:
             self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
@@ -100,6 +196,11 @@ class ActivityMonitor:
         
         logger.info("Stopping activity monitor")
         self.stop_event.set()
+        
+        if self.mqtt_client:
+            self.mqtt_client.loop_stop()
+            self.mqtt_client.disconnect()
+            
         self.monitor_thread.join(timeout=10)
         if self.monitor_thread.is_alive():
             logger.warning("Activity monitor thread did not stop cleanly")
@@ -225,4 +326,21 @@ class ActivityMonitor:
             # Wait for next poll
             time.sleep(self.poll_interval)
         
-        logger.info("Activity monitor loop stopped") 
+        logger.info("Activity monitor loop stopped")
+
+    def _mqtt_monitor_loop(self):
+        """Background thread for monitoring MQTT connection"""
+        while not self.stop_event.is_set():
+            if not self.mqtt_client.is_connected():
+                logger.warning("MQTT client disconnected, attempting to reconnect...")
+                try:
+                    self.mqtt_client.reconnect()
+                except Exception as e:
+                    logger.error(f"Failed to reconnect to MQTT: {str(e)}")
+                    time.sleep(self.poll_interval)
+            time.sleep(1)
+        
+        # Cleanup MQTT client
+        if self.mqtt_client:
+            self.mqtt_client.loop_stop()
+            self.mqtt_client.disconnect() 
