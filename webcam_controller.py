@@ -689,6 +689,13 @@ class WebcamController:
             logger.error(f"Session directory does not exist: {session_dir}")
             return False
         
+        # Initialize variables that need to be cleaned up
+        process = None
+        temp_list_file = None
+        stdout_thread = None
+        stderr_thread = None
+        session_id = Path(session_dir).name
+        
         try:
             # Get all jpg files in the directory
             frames = sorted([f for f in os.listdir(session_dir) if f.endswith('.jpg')])
@@ -768,7 +775,6 @@ class WebcamController:
                 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
                 
                 # Store the process in our tracking dictionary
-                session_id = Path(session_dir).name
                 with self.ffmpeg_processes_lock:
                     self.ffmpeg_processes[session_id] = {
                         'process': process,
@@ -784,50 +790,56 @@ class WebcamController:
                 # Start a thread to read stderr for progress updates
                 def read_stderr():
                     nonlocal frame_count
-                    for line in process.stderr:
-                        if 'frame=' in line:
-                            try:
-                                # Extract frame number
-                                frame_match = re.search(r'frame=\s*(\d+)', line)
-                                if frame_match:
-                                    frame_count = int(frame_match.group(1))
-                                    progress = min(95, (frame_count / total_frames) * 100)
-                                    
-                                    # Update progress file
-                                    write_progress_data({
-                                        'status': 'processing',
-                                        'progress': progress,
-                                        'frame': frame_count,
-                                        'total_frames': total_frames,
-                                        'start_time': start_time,
-                                        'elapsed_seconds': time.time() - start_time
-                                    })
-                            except Exception as e:
-                                logger.error(f"Error parsing FFmpeg output: {str(e)}")
+                    try:
+                        for line in process.stderr:
+                            if 'frame=' in line:
+                                try:
+                                    # Extract frame number
+                                    frame_match = re.search(r'frame=\s*(\d+)', line)
+                                    if frame_match:
+                                        frame_count = int(frame_match.group(1))
+                                        progress = min(95, (frame_count / total_frames) * 100)
+                                        
+                                        # Update progress file
+                                        write_progress_data({
+                                            'status': 'processing',
+                                            'progress': progress,
+                                            'frame': frame_count,
+                                            'total_frames': total_frames,
+                                            'start_time': start_time,
+                                            'elapsed_seconds': time.time() - start_time
+                                        })
+                                except Exception as e:
+                                    logger.error(f"Error parsing FFmpeg output: {str(e)}")
+                    except Exception as e:
+                        logger.error(f"Error in stderr reading thread: {str(e)}")
                 
                 # Start a thread to read stdout for progress updates
                 def read_stdout():
                     nonlocal frame_count
-                    for line in process.stdout:
-                        if 'frame=' in line:
-                            try:
-                                # Extract frame number
-                                frame_match = re.search(r'frame=\s*(\d+)', line)
-                                if frame_match:
-                                    frame_count = int(frame_match.group(1))
-                                    progress = min(95, (frame_count / total_frames) * 100)
-                                    
-                                    # Update progress file
-                                    write_progress_data({
-                                        'status': 'processing',
-                                        'progress': progress,
-                                        'frame': frame_count,
-                                        'total_frames': total_frames,
-                                        'start_time': start_time,
-                                        'elapsed_seconds': time.time() - start_time
-                                    })
-                            except Exception as e:
-                                logger.error(f"Error parsing FFmpeg output: {str(e)}")
+                    try:
+                        for line in process.stdout:
+                            if 'frame=' in line:
+                                try:
+                                    # Extract frame number
+                                    frame_match = re.search(r'frame=\s*(\d+)', line)
+                                    if frame_match:
+                                        frame_count = int(frame_match.group(1))
+                                        progress = min(95, (frame_count / total_frames) * 100)
+                                        
+                                        # Update progress file
+                                        write_progress_data({
+                                            'status': 'processing',
+                                            'progress': progress,
+                                            'frame': frame_count,
+                                            'total_frames': total_frames,
+                                            'start_time': start_time,
+                                            'elapsed_seconds': time.time() - start_time
+                                        })
+                                except Exception as e:
+                                    logger.error(f"Error parsing FFmpeg output: {str(e)}")
+                    except Exception as e:
+                        logger.error(f"Error in stdout reading thread: {str(e)}")
                 
                 # Start the threads
                 stdout_thread = threading.Thread(target=read_stdout)
@@ -907,7 +919,6 @@ class WebcamController:
                 })
                 
                 # Clean up the process entry
-                session_id = Path(session_dir).name
                 with self.ffmpeg_processes_lock:
                     if session_id in self.ffmpeg_processes:
                         del self.ffmpeg_processes[session_id]
@@ -916,9 +927,10 @@ class WebcamController:
             
             # Clean up the temporary file
             try:
-                os.remove(temp_list_file)
-            except:
-                pass
+                if temp_list_file and os.path.exists(temp_list_file):
+                    os.remove(temp_list_file)
+            except Exception as e:
+                logger.error(f"Error removing temporary file: {str(e)}")
             
             logger.info(f"Created timelapse video: {output_video}")
             return {
@@ -929,7 +941,44 @@ class WebcamController:
         except Exception as e:
             logger.error(f"Error creating video: {str(e)}")
             return False
-            
+        finally:
+            # Ensure all resources are cleaned up, even in case of exceptions
+            try:
+                # Close process pipes if they're still open
+                if process:
+                    if process.stdout:
+                        process.stdout.close()
+                    if process.stderr:
+                        process.stderr.close()
+                    
+                    # If process is still running, terminate it
+                    if process.poll() is None:
+                        try:
+                            process.terminate()
+                            process.wait(timeout=5)
+                        except:
+                            process.kill()
+                
+                # Remove the process from tracking dictionary if it's still there
+                with self.ffmpeg_processes_lock:
+                    if session_id in self.ffmpeg_processes:
+                        del self.ffmpeg_processes[session_id]
+                
+                # Clean up temporary file if it exists
+                if temp_list_file and os.path.exists(temp_list_file):
+                    os.remove(temp_list_file)
+                    
+                # Wait for threads to finish if they're still running
+                # We set a short timeout since they're daemon threads
+                if stdout_thread and stdout_thread.is_alive():
+                    stdout_thread.join(timeout=1)
+                if stderr_thread and stderr_thread.is_alive():
+                    stderr_thread.join(timeout=1)
+                    
+                logger.debug("Video creation resources cleaned up")
+            except Exception as cleanup_error:
+                logger.error(f"Error during cleanup in create_video: {str(cleanup_error)}")
+
     def cancel_video(self, session_id):
         """Cancel an ongoing video creation process"""
         with self.ffmpeg_processes_lock:
@@ -952,6 +1001,12 @@ class WebcamController:
                             # Force kill if it doesn't terminate gracefully
                             process.kill()
                         
+                        # Close pipes to prevent resource leaks
+                        if process.stdout:
+                            process.stdout.close()
+                        if process.stderr:
+                            process.stderr.close()
+                        
                         # Update the status file
                         write_progress = process_info.get('write_progress')
                         if write_progress:
@@ -964,14 +1019,27 @@ class WebcamController:
                                 'error': 'Video creation was cancelled by user'
                             })
                         
+                        # Remove the process from the tracking dictionary
+                        del self.ffmpeg_processes[session_id]
+                        
                         logger.info(f"Cancelled video creation for session {session_id}")
                         return True
                     except Exception as e:
                         logger.error(f"Error cancelling video creation: {str(e)}")
+                        
+                        # Ensure the process is removed from tracking even if there's an error
+                        if session_id in self.ffmpeg_processes:
+                            del self.ffmpeg_processes[session_id]
+                            
                         return False
                 else:
                     # Process already completed or not found
                     logger.warning(f"No active video creation process found for session {session_id}")
+                    
+                    # Clean up the entry if it exists
+                    if session_id in self.ffmpeg_processes:
+                        del self.ffmpeg_processes[session_id]
+                        
                     return False
             else:
                 logger.warning(f"No video creation process found for session {session_id}")
@@ -1196,6 +1264,32 @@ class WebcamController:
         # Stop any active timelapse
         if self.is_capturing:
             self.stop_timelapse()
+            
+        # Terminate any active ffmpeg processes
+        with self.ffmpeg_processes_lock:
+            for session_id, process_info in list(self.ffmpeg_processes.items()):
+                logger.debug(f"Terminating ffmpeg process for session {session_id}")
+                try:
+                    process = process_info.get('process')
+                    if process and process.poll() is None:  # Process is still running
+                        # Try to terminate gracefully first
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            # Force kill if it doesn't terminate gracefully
+                            process.kill()
+                            
+                        # Close pipes
+                        if process.stdout:
+                            process.stdout.close()
+                        if process.stderr:
+                            process.stderr.close()
+                except Exception as e:
+                    logger.error(f"Error terminating ffmpeg process for session {session_id}: {str(e)}")
+            
+            # Clear the processes dictionary
+            self.ffmpeg_processes.clear()
             
         # Release all cached cameras
         with self.camera_cache_lock:
