@@ -36,7 +36,7 @@ class ActivityMonitor:
         self.mqtt_username = os.getenv('MQTT_USERNAME')
         self.mqtt_password = os.getenv('MQTT_PASSWORD')
         self.mqtt_client = None
-        self.use_mqtt = bool(os.getenv('USE_MQTT', 'true').lower() == 'true')
+        self.use_mqtt = bool(os.getenv('USE_MQTT', 'false').lower() == 'true')
         
         self.target_url = os.getenv('TARGET_API_URL', 'http://localhost:8080')
         self.ws_url = os.getenv('WS_STATUS_URL', '')  # WebSocket URL if using WS
