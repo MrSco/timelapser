@@ -1,6 +1,9 @@
 #!/bin/bash
 echo "Setting up Timelapser..."
 
+# install ffmpeg
+sudo apt-get install ffmpeg
+
 # Get the directory of the script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
