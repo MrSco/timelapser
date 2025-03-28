@@ -47,6 +47,12 @@ class WebcamController:
         self.camera_last_used = {}
         self.camera_cache_timeout = 30  # Seconds to keep a camera open
         
+        # IP camera settings
+        self.ip_camera_settings = {
+            'timeout': 5,  # Timeout in seconds for HTTP requests
+            'verify_ssl': False  # Whether to verify SSL certificates
+        }
+        
         # Video creation process tracking
         self.ffmpeg_processes = {}
         self.ffmpeg_processes_lock = threading.Lock()
@@ -62,21 +68,53 @@ class WebcamController:
         self.cache_cleanup_thread = threading.Thread(target=self._cleanup_camera_cache, daemon=True)
         self.cache_cleanup_thread.start()
         
+        # Load IP camera settings from environment variables
+        self._load_ip_camera_settings()
+        
         # Scan for available cameras
         self.scan_cameras()
         
         # Clean up old ZIP files on startup
         self.cleanup_old_zip_files()
     
+    def _load_ip_camera_settings(self):
+        """Load IP camera settings from environment variables and add the camera if configured"""
+        try:
+            # Load environment variables
+            ip_camera_url = os.getenv('IP_CAMERA_URL')
+            if ip_camera_url:
+                logger.info("Found IP camera configuration in environment variables")
+                                
+                # Add the IP camera
+                self.add_ip_camera(
+                    url=ip_camera_url,
+                    timeout=5,  # Default timeout
+                    verify_ssl=False  # Default SSL verification
+                )
+                
+                # If no camera is selected yet, select the IP camera
+                if not self.selected_camera or self.selected_camera == '/dev/video0':
+                    # Find the IP camera ID (should be the last one added)
+                    ip_cameras = [cam for cam in self.available_cameras if cam.startswith('ip_camera_')]
+                    if ip_cameras:
+                        self.selected_camera = ip_cameras[-1]
+                        logger.info(f"Selected IP camera as default: {self.selected_camera}")
+        except Exception as e:
+            logger.error(f"Error loading IP camera settings: {str(e)}")
+    
     def scan_cameras(self):
         """Scan for available camera devices based on platform"""
-        self.available_cameras = []
+        # Preserve existing IP cameras
+        ip_cameras = [cam for cam in self.available_cameras if cam.startswith('ip_camera_')]
+        
+        # Clear the list but keep IP cameras
+        self.available_cameras = ip_cameras.copy()
         
         try:
             if self.platform == 'Linux':
                 # On Linux, look for video devices in /dev
                 video_devices = [f"/dev/video{i}" for i in range(10) if os.path.exists(f"/dev/video{i}")]
-                self.available_cameras = video_devices
+                self.available_cameras.extend(video_devices)
             elif self.platform == 'Windows':
                 # On Windows, use more reliable method to detect cameras
                 try:
@@ -111,7 +149,7 @@ class WebcamController:
                     logger.warning(f"Error using ffmpeg to list devices: {str(e)}")
                     
                 # If no cameras found, try alternative method
-                if not self.available_cameras:
+                if len(self.available_cameras) == len(ip_cameras):  # Only IP cameras found
                     try:
                         # Try using PowerShell to get camera info
                         ps_command = "Get-CimInstance Win32_PnPEntity | Where-Object {$_.PNPClass -eq 'Camera'} | Select-Object Name | ConvertTo-Json"
@@ -173,7 +211,7 @@ class WebcamController:
                     logger.warning(f"Error using AVFoundation to list devices: {str(e)}")
 
                 # If no cameras found, try alternative method using system_profiler
-                if not self.available_cameras:
+                if len(self.available_cameras) == len(ip_cameras):  # Only IP cameras found
                     try:
                         result = subprocess.run(
                             ['system_profiler', 'SPCameraDataType', '-json'],
@@ -192,8 +230,8 @@ class WebcamController:
         except Exception as e:
             logger.error(f"Error scanning for cameras: {str(e)}")
         
-        # If no cameras found, add a default one
-        if not self.available_cameras:
+        # If no physical cameras found, add a default one (but only if no IP cameras)
+        if len(self.available_cameras) == 0:
             if self.platform == 'Linux':
                 self.available_cameras = ['/dev/video0']
             elif self.platform == 'Windows':
@@ -318,19 +356,23 @@ class WebcamController:
                 time.sleep(max(1, self.interval / 2))  # Sleep at least 1 second, or half the interval
     
     def _get_camera_index(self, camera=None):
-        """Helper method to convert camera identifier to an index
+        """Helper method to convert camera identifier to an index or return IP camera identifier
         
         Args:
             camera: Camera identifier (index, string, or device path)
             
         Returns:
-            Integer camera index for OpenCV
+            Integer camera index for OpenCV or string identifier for IP cameras
         """
         camera_to_use = camera if camera is not None else self.selected_camera
         camera_index = 0  # Default to first camera
         
         if camera_to_use is None:
             return camera_index
+            
+        # Handle IP camera identifiers
+        if isinstance(camera_to_use, str) and camera_to_use.startswith('ip_camera_'):
+            return camera_to_use
             
         # Handle integer camera index
         if isinstance(camera_to_use, int):
@@ -355,6 +397,10 @@ class WebcamController:
                     
             # Case 4: Camera name is in available_cameras list
             if camera_to_use in self.available_cameras:
+                # If it's an IP camera, return the identifier directly
+                if camera_to_use.startswith('ip_camera_'):
+                    return camera_to_use
+                # Otherwise return its index
                 return self.available_cameras.index(camera_to_use)
                 
             # Case 5: Try to use camera name directly with OpenCV
@@ -385,8 +431,22 @@ class WebcamController:
                     # Release cameras outside the loop to avoid modifying dict during iteration
                     for camera_id in cameras_to_release:
                         if camera_id in self.camera_cache:
-                            logger.debug(f"Releasing cached camera {camera_id} due to inactivity")
-                            self.camera_cache[camera_id].release()
+                            camera = self.camera_cache[camera_id]
+                            # Check if this is an IP camera (dictionary) or OpenCV camera
+                            if isinstance(camera, dict) and camera.get('type') == 'ip':
+                                # For IP cameras, just clear the cached frame
+                                camera['last_frame'] = None
+                                camera['last_frame_time'] = 0
+                                logger.debug(f"Cleared cached frame for IP camera {camera_id}")
+                            else:
+                                # For OpenCV cameras, release the capture object
+                                try:
+                                    camera.release()
+                                    logger.debug(f"Released OpenCV camera {camera_id}")
+                                except Exception as e:
+                                    logger.error(f"Error releasing camera {camera_id}: {str(e)}")
+                            
+                            # Remove from cache
                             del self.camera_cache[camera_id]
                             del self.camera_last_used[camera_id]
             except Exception as e:
@@ -399,10 +459,10 @@ class WebcamController:
         """Get a camera object from cache or create a new one
         
         Args:
-            camera_index: Integer camera index for OpenCV
+            camera_index: Integer camera index for OpenCV or IP camera identifier
             
         Returns:
-            OpenCV VideoCapture object
+            OpenCV VideoCapture object or IP camera settings dict
         """
         cache_key = str(camera_index)
         
@@ -411,7 +471,11 @@ class WebcamController:
             if cache_key in self.camera_cache:
                 self.camera_last_used[cache_key] = time.time()
                 
-                # Check if camera is still valid
+                # For IP cameras, just return the cached settings
+                if isinstance(self.camera_cache[cache_key], dict) and self.camera_cache[cache_key].get('type') == 'ip':
+                    return self.camera_cache[cache_key]
+                
+                # For regular cameras, check if still valid
                 if not self.camera_cache[cache_key].isOpened():
                     logger.debug(f"Cached camera {cache_key} is no longer valid, recreating")
                     self.camera_cache[cache_key].release()
@@ -419,7 +483,14 @@ class WebcamController:
                 else:
                     return self.camera_cache[cache_key]
             
-            # Create new camera
+            # Check if this is an IP camera
+            if isinstance(camera_index, str) and camera_index.startswith('ip_camera_'):
+                if camera_index in self.camera_cache:
+                    return self.camera_cache[camera_index]
+                else:
+                    raise Exception(f"IP camera {camera_index} not found in cache")
+            
+            # Create new regular camera
             logger.debug(f"Creating new camera for index {camera_index}")
             
             if self.platform == 'Darwin':  # macOS specific handling
@@ -543,8 +614,51 @@ class WebcamController:
         for _ in range(flush_count):
             camera.grab()
 
+    def _capture_ip_camera_frame(self, camera_settings):
+        """Capture a frame from an IP camera
+        
+        Args:
+            camera_settings: Dictionary containing IP camera settings
+            
+        Returns:
+            numpy.ndarray: The captured frame
+        """
+        try:
+            # Check if we have a cached frame that's recent enough
+            current_time = time.time()
+            if (camera_settings['last_frame'] is not None and 
+                current_time - camera_settings['last_frame_time'] < 0.1):  # 100ms cache
+                return camera_settings['last_frame']
+                        
+            # Make the request to the IP camera
+            response = requests.get(
+                camera_settings['url'],
+                timeout=camera_settings['timeout'],
+                verify=camera_settings['verify_ssl']
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Failed to get frame from IP camera: HTTP {response.status_code}")
+            
+            # Convert the response content to a numpy array
+            nparr = np.frombuffer(response.content, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if frame is None:
+                raise Exception("Failed to decode frame from IP camera")
+            
+            # Cache the frame
+            camera_settings['last_frame'] = frame
+            camera_settings['last_frame_time'] = current_time
+            
+            return frame
+            
+        except Exception as e:
+            logger.error(f"Error capturing frame from IP camera: {str(e)}")
+            raise
+
     def capture_single_frame(self, output_file=None, camera=None, return_base64=False, fast_mode=False):
-        """Capture a single frame using OpenCV - can be used for both test captures and timelapse captures
+        """Capture a single frame using OpenCV or IP camera - can be used for both test captures and timelapse captures
         
         Args:
             output_file: Path to save the captured frame (optional if return_base64=True)
@@ -564,27 +678,32 @@ class WebcamController:
             # Get camera from cache or create new one
             cam = self._get_camera(camera_index)
             
-            # Reduced wait time - only wait if not in fast mode
-            if not fast_mode:
-                time.sleep(0.1)  # Reduced from 0.5 to 0.1 seconds
+            # Check if this is an IP camera
+            is_ip_camera = isinstance(cam, dict) and cam.get('type') == 'ip'
             
-            # Flush the camera buffer to get the most recent frame
-            # This helps prevent delayed frames in timelapses
-            if not fast_mode:
-                # For non-fast mode, flush more frames for better quality
-                self._flush_camera_buffer(cam, 5)
+            if is_ip_camera:
+                # Capture frame from IP camera
+                frame = self._capture_ip_camera_frame(cam)
             else:
-                # For fast mode, just flush a couple frames to maintain performance
-                self._flush_camera_buffer(cam, 2)
-            
-            # Capture frame
-            ret, frame = cam.read()
-            
-            # Don't release the camera - it's now cached
-            # cam.release()
-            
-            if not ret or frame is None:
-                raise Exception("Failed to capture frame from camera")
+                # Regular camera capture
+                # Reduced wait time - only wait if not in fast mode
+                if not fast_mode:
+                    time.sleep(0.1)  # Reduced from 0.5 to 0.1 seconds
+                
+                # Flush the camera buffer to get the most recent frame
+                # This helps prevent delayed frames in timelapses
+                if not fast_mode:
+                    # For non-fast mode, flush more frames for better quality
+                    self._flush_camera_buffer(cam, 5)
+                else:
+                    # For fast mode, just flush a couple frames to maintain performance
+                    self._flush_camera_buffer(cam, 2)
+                
+                # Capture frame
+                ret, frame = cam.read()
+                
+                if not ret or frame is None:
+                    raise Exception("Failed to capture frame from camera")
             
             # Apply post-processing adjustments in software only if not in fast mode
             if not fast_mode:
@@ -1296,7 +1415,14 @@ class WebcamController:
             for camera_id, cam in list(self.camera_cache.items()):
                 logger.debug(f"Releasing camera {camera_id}")
                 try:
-                    cam.release()
+                    # Handle IP cameras differently
+                    if isinstance(cam, dict) and cam.get('type') == 'ip':
+                        # Clear cached frame
+                        cam['last_frame'] = None
+                        cam['last_frame_time'] = 0
+                    else:
+                        # Regular camera - release it
+                        cam.release()
                 except Exception as e:
                     logger.error(f"Error releasing camera {camera_id}: {str(e)}")
             
@@ -1638,6 +1764,46 @@ If you encounter issues with the conversion scripts:
                 
         except Exception as e:
             logger.error(f"Error cleaning up old ZIP files: {str(e)}")
+
+    def add_ip_camera(self, url, timeout=5, verify_ssl=False):
+        """Add an IP camera to the available cameras list
+        
+        Args:
+            url: URL of the IP camera's MJPEG stream
+            timeout: Timeout in seconds for HTTP requests
+            verify_ssl: Whether to verify SSL certificates
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Validate URL format
+            if not url.startswith(('http://', 'https://')):
+                logger.error("Invalid URL format. URL must start with http:// or https://")
+                return False
+            
+            # Create a unique identifier for the IP camera
+            camera_id = f"ip_camera_{len([c for c in self.available_cameras if c.startswith('ip_camera_')])}"
+            
+            # Store camera settings
+            self.camera_cache[camera_id] = {
+                'type': 'ip',
+                'url': url,
+                'timeout': timeout,
+                'verify_ssl': verify_ssl,
+                'last_frame': None,
+                'last_frame_time': 0
+            }
+            
+            # Add to available cameras list
+            self.available_cameras.append(camera_id)
+            
+            logger.info(f"Added IP camera: {url}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error adding IP camera: {str(e)}")
+            return False
 
 # Create a singleton instance
 webcam_controller = WebcamController() 
