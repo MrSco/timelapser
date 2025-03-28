@@ -485,10 +485,23 @@ class WebcamController:
             
             # Check if this is an IP camera
             if isinstance(camera_index, str) and camera_index.startswith('ip_camera_'):
-                if camera_index in self.camera_cache:
+                # Try to recreate IP camera settings from environment variables
+                ip_camera_url = os.getenv('IP_CAMERA_URL')
+                if ip_camera_url:
+                    # Create new IP camera settings
+                    self.camera_cache[camera_index] = {
+                        'type': 'ip',
+                        'url': ip_camera_url,
+                        'timeout': self.ip_camera_settings.get('timeout', 5),
+                        'verify_ssl': self.ip_camera_settings.get('verify_ssl', False),
+                        'last_frame': None,
+                        'last_frame_time': 0
+                    }
+                    self.camera_last_used[camera_index] = time.time()
+                    logger.info(f"Recreated IP camera settings for {camera_index}")
                     return self.camera_cache[camera_index]
                 else:
-                    raise Exception(f"IP camera {camera_index} not found in cache")
+                    raise Exception(f"IP camera {camera_index} not found in cache and no URL in environment variables")
             
             # Create new regular camera
             logger.debug(f"Creating new camera for index {camera_index}")
