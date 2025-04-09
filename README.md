@@ -165,7 +165,7 @@ Each timelapse recording is organized into a session with:
    [Service]
    User=yourusername
    WorkingDirectory=/home/yourusername/timelapser
-   ExecStart=/home/yourusername/timelapser/.venv/bin/python -m timelapser
+   ExecStart=/home/yourusername/timelapser/.venv/bin/python app.py
    Restart=always
 
    [Install]
