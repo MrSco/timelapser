@@ -16,6 +16,7 @@ A standalone timelapse capture tool designed to work with any system that provid
 - Camera preview and test capture functionality
 - Session-based recording with automatic file organization
 - State persistence between restarts
+- Dark mode support with system theme synchronization
 
 ## Requirements
 
@@ -112,6 +113,16 @@ You can configure patterns to ignore certain activities. When an activity matche
 Patterns can be:
 - Regular expressions (for advanced matching)
 - Simple text strings (for basic matching)
+
+### UI Customization
+
+#### Theme Settings
+
+The web interface supports both light and dark themes:
+- Click the theme toggle button in the header to switch between light and dark mode
+- Theme preference is automatically saved and persists across sessions
+- Automatically syncs with system theme preference if no manual selection is made
+- Real-time theme updates when system preference changes
 
 ### Camera Settings
 

@@ -50,13 +50,15 @@ const videoLoading = document.getElementById('video-loading');
 const ignoredPatternsList = document.getElementById('ignored-patterns-list');
 const newPatternInput = document.getElementById('new-pattern-input');
 const addPatternButton = document.getElementById('add-pattern-button');
+const themeToggle = document.getElementById('theme-toggle');
 
 // Global variables
 let state = {
     isCapturing: false,
     currentSession: null,
     autoMode: false,
-    ignoredPatterns: []
+    ignoredPatterns: [],
+    theme: 'light'
 };
 
 let currentSessionId = null; // Track the current session ID for downloads
@@ -105,13 +107,42 @@ function loadSessionsExpandedState() {
     }
 }
 
+// Theme management functions
+function setTheme(theme) {
+    if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    state.theme = theme;
+}
+
+function toggleTheme() {
+    const newTheme = state.theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+}
+
+function loadTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+        setTheme(savedTheme);
+    } else {
+        // Check if user prefers dark mode
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            setTheme('dark');
+        }
+    }
+}
+
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         // log the state
         console.log('Initializing application state:', state);
         
-        // Load sessions expanded state from localStorage
+        // Load theme and sessions expanded state from localStorage
+        loadTheme();
         loadSessionsExpandedState();
         
         // Fetch application state first
@@ -144,6 +175,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cameraSelect = document.getElementById('camera-select');
         if (cameraSelect.options.length > 0) {
             await preInitializeCamera(cameraSelect.value);
+        }
+        
+        // Listen for system theme changes
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                if (!localStorage.getItem('theme')) {
+                    setTheme(e.matches ? 'dark' : 'light');
+                }
+            });
         }
         
         console.log('Timelapser initialized');
@@ -262,6 +302,9 @@ async function saveState() {
 
 // Set up event listeners
 function setupEventListeners() {
+    // Theme toggle button
+    themeToggle.addEventListener('click', toggleTheme);
+    
     // Camera refresh button
     //refreshCamerasButton.addEventListener('click', fetchCameras);
     
